@@ -14,7 +14,9 @@ import (
 type Server struct {
 	DB        *pgxpool.Pool
 	WebOrigin string
-	OrgID     string // the single organization the MVP serves
+	OrgID     string       // the single organization the MVP serves
+	Portal    http.Handler // public applicant API, mounted at /api/v1/portal
+	Links     http.Handler // form links and invitations, mounted at /api/v1/admin/links
 }
 
 func (s *Server) Routes() http.Handler {
@@ -27,6 +29,12 @@ func (s *Server) Routes() http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", s.health)
 		r.Route("/admin/forms", s.formRoutes)
+		if s.Portal != nil {
+			r.Mount("/portal", s.Portal)
+		}
+		if s.Links != nil {
+			r.Mount("/admin/links", s.Links)
+		}
 	})
 	return r
 }
@@ -45,7 +53,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", s.WebOrigin)
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
@@ -56,7 +64,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type, Authorization", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }

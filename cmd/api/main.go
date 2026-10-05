@@ -15,6 +15,9 @@ import (
 	"github.com/gabrielventodev/formflow/api/internal/db"
 	"github.com/gabrielventodev/formflow/api/internal/forms"
 	"github.com/gabrielventodev/formflow/api/internal/httpapi"
+	"github.com/gabrielventodev/formflow/api/internal/mailer"
+	"github.com/gabrielventodev/formflow/api/internal/portal"
+	"github.com/gabrielventodev/formflow/api/internal/storage"
 )
 
 func main() {
@@ -44,10 +47,19 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("load organization: %w", err)
 	}
+	store, err := storage.New(ctx, cfg.Storage)
+	if err != nil {
+		return err
+	}
+	portalHandler := &portal.Handler{
+		DB: pool, Store: store, Mail: mailer.New(cfg.Mail),
+		WebURL: cfg.WebPublicURL, MaxUploadMB: cfg.MaxUploadMB, OrgID: orgID,
+	}
 
 	srv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           (&httpapi.Server{DB: pool, WebOrigin: cfg.WebOrigin, OrgID: orgID}).Routes(),
+		Addr: cfg.Addr,
+		Handler: (&httpapi.Server{DB: pool, WebOrigin: cfg.WebOrigin, OrgID: orgID,
+			Portal: portalHandler.Routes(), Links: portalHandler.AdminRoutes()}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
