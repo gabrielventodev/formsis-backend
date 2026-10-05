@@ -9,6 +9,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gabrielventodev/formflow/api/internal/auth"
 	"github.com/gabrielventodev/formflow/api/internal/db"
 	"github.com/gabrielventodev/formflow/api/internal/forms"
 )
@@ -34,7 +35,20 @@ func testServer(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return (&Server{DB: pool, WebOrigin: "http://localhost:3000", OrgID: org}).Routes()
+	// Admin routes need a session: log in once and attach the cookie to every request.
+	store := &auth.Store{DB: pool}
+	if _, err := store.EnsureAdmin(ctx, "forms-test@example.com", "secreto-123", "Test", "Test"); err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := store.Login(ctx, "forms-test@example.com", "secreto-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := (&Server{DB: pool, WebOrigin: "http://localhost:3000", OrgID: org}).Routes()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.AddCookie(&http.Cookie{Name: auth.CookieName, Value: token})
+		h.ServeHTTP(w, r)
+	})
 }
 
 func call(t *testing.T, h http.Handler, method, path string, body any, wantStatus int, out any) {

@@ -12,11 +12,13 @@ import (
 )
 
 type Server struct {
-	DB        *pgxpool.Pool
-	WebOrigin string
-	OrgID     string       // the single organization the MVP serves
-	Portal    http.Handler // public applicant API, mounted at /api/v1/portal
-	Links     http.Handler // form links and invitations, mounted at /api/v1/admin/links
+	DB           *pgxpool.Pool
+	WebOrigin    string
+	OrgID        string // the single organization the MVP serves
+	CookieSecure bool
+	Files        FileOpener   // reads submission_files.storage_key for the review panel
+	Portal       http.Handler // public applicant API, mounted at /api/v1/portal
+	Links        http.Handler // form links and invitations, mounted at /api/v1/admin/links
 }
 
 func (s *Server) Routes() http.Handler {
@@ -28,13 +30,22 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/healthz", s.health)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", s.health)
-		r.Route("/admin/forms", s.formRoutes)
 		if s.Portal != nil {
 			r.Mount("/portal", s.Portal)
 		}
-		if s.Links != nil {
-			r.Mount("/admin/links", s.Links)
-		}
+
+		r.Post("/auth/login", s.login)
+		r.Post("/auth/logout", s.logout)
+		r.With(s.requireUser).Get("/auth/me", s.me)
+
+		r.Route("/admin", func(r chi.Router) {
+			r.Use(s.requireUser)
+			r.Route("/forms", s.formRoutes)
+			if s.Links != nil {
+				r.Mount("/links", s.Links)
+			}
+			s.adminRoutes(r)
+		})
 	})
 	return r
 }
