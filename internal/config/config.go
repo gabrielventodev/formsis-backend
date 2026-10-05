@@ -17,6 +17,15 @@ type Config struct {
 	MaxUploadMB  float64
 	Storage      storage.Config
 	Mail         mailer.Config
+
+	// Bootstrap owner account, created on startup if the email does not exist.
+	AdminEmail    string
+	AdminPassword string
+	AdminName     string
+	OrgName       string
+
+	// CookieSecure marks the session cookie Secure; enable it behind HTTPS.
+	CookieSecure bool
 }
 
 func Load() Config {
@@ -45,6 +54,11 @@ func Load() Config {
 			Password: env("SMTP_PASSWORD", ""),
 			From:     env("MAIL_FROM", "FormFlow <no-reply@localhost>"),
 		},
+		AdminEmail:    os.Getenv("ADMIN_EMAIL"),
+		AdminPassword: os.Getenv("ADMIN_PASSWORD"),
+		AdminName:     env("ADMIN_NAME", "Administrador"),
+		OrgName:       env("ORG_NAME", "Mi organización"),
+		CookieSecure:  os.Getenv("COOKIE_SECURE") == "true",
 	}
 }
 

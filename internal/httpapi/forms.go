@@ -15,8 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-// TODO(auth): these routes are open until admin sessions land with the admin panel;
-// the organization is the single default one.
+// Mounted under /admin, behind requireUser; the organization is the single default one.
 func (s *Server) formRoutes(r chi.Router) {
 	r.Get("/", s.listForms)
 	r.Post("/", s.createForm)

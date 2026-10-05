@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gabrielventodev/formflow/api/internal/auth"
 	"github.com/gabrielventodev/formflow/api/internal/config"
 	"github.com/gabrielventodev/formflow/api/internal/db"
 	"github.com/gabrielventodev/formflow/api/internal/forms"
@@ -43,6 +44,16 @@ func run() error {
 	}
 	slog.Info("migrations applied")
 
+	if cfg.AdminEmail != "" && cfg.AdminPassword != "" {
+		created, err := (&auth.Store{DB: pool}).EnsureAdmin(ctx, cfg.AdminEmail, cfg.AdminPassword, cfg.AdminName, cfg.OrgName)
+		if err != nil {
+			return err
+		}
+		if created {
+			slog.Info("admin account created", "email", cfg.AdminEmail)
+		}
+	}
+
 	orgID, err := forms.DefaultOrganization(ctx, pool)
 	if err != nil {
 		return fmt.Errorf("load organization: %w", err)
@@ -51,15 +62,25 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	mail := mailer.New(cfg.Mail)
 	portalHandler := &portal.Handler{
-		DB: pool, Store: store, Mail: mailer.New(cfg.Mail),
+		DB: pool, Store: store, Mail: mail,
 		WebURL: cfg.WebPublicURL, MaxUploadMB: cfg.MaxUploadMB, OrgID: orgID,
 	}
 
 	srv := &http.Server{
 		Addr: cfg.Addr,
-		Handler: (&httpapi.Server{DB: pool, WebOrigin: cfg.WebOrigin, OrgID: orgID,
-			Portal: portalHandler.Routes(), Links: portalHandler.AdminRoutes()}).Routes(),
+		Handler: (&httpapi.Server{
+			DB:           pool,
+			WebOrigin:    cfg.WebOrigin,
+			OrgID:        orgID,
+			CookieSecure: cfg.CookieSecure,
+			Files:        store,
+			Portal:       portalHandler.Routes(),
+			Links:        portalHandler.AdminRoutes(),
+			Mail:         mail,
+			WebURL:       cfg.WebPublicURL,
+		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {

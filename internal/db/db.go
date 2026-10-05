@@ -37,5 +37,6 @@ func migrate(ctx context.Context, sqlDB *sql.DB) error {
 	if err := goose.SetDialect("postgres"); err != nil {
 		return err
 	}
-	return goose.UpContext(ctx, sqlDB, ".")
+	// Feature branches add migrations in parallel; allow applying a lower-numbered one late.
+	return goose.UpContext(ctx, sqlDB, ".", goose.WithAllowMissing())
 }
