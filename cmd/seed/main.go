@@ -1,4 +1,4 @@
-// Command seed loads a demo organization with a published KYB form and a public link, for trying the portal locally.
+// Command seed adds a published KYB form with a public link to the default organization, for trying the portal locally.
 //
 //	cd api && go run ./cmd/seed
 package main
@@ -10,6 +10,8 @@ import (
 
 	"github.com/gabrielventodev/formflow/api/internal/config"
 	"github.com/gabrielventodev/formflow/api/internal/db"
+	"github.com/gabrielventodev/formflow/api/internal/forms"
+	"github.com/gabrielventodev/formflow/api/internal/schema"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -60,7 +62,7 @@ const demoSchema = `{
           "accept": ["application/pdf"], "maxMb": 10,
           "showIf": { "field": "tipo", "op": "neq", "value": "Persona natural con giro" } },
         { "key": "cedula_rep", "type": "file", "label": "Cédula del representante (ambos lados)", "required": true,
-          "accept": ["image/*", "application/pdf"], "maxMb": 5, "maxFiles": 2 },
+          "accept": ["image/*", "application/pdf"], "maxMb": 5 },
         { "key": "acepta", "type": "checkbox", "label": "Declaro que la información entregada es verdadera.", "required": true }
       ]
     }
@@ -79,6 +81,14 @@ func main() {
 		log.Fatal(err)
 	}
 
+	parsed, err := schema.Parse([]byte(demoSchema))
+	if err != nil {
+		log.Fatal(err)
+	}
+	if problems := schema.Validate(parsed); len(problems) > 0 {
+		log.Fatalf("el formulario de prueba tiene errores: %v", problems)
+	}
+
 	err = pgx.BeginFunc(ctx, pool, func(tx pgx.Tx) error {
 		var exists bool
 		if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM form_links WHERE token = $1)`, linkToken).Scan(&exists); err != nil {
@@ -87,12 +97,11 @@ func main() {
 		if exists {
 			return nil
 		}
-		var orgID, formID, versionID string
-		if err := tx.QueryRow(ctx, `
-			INSERT INTO organizations (name, slug) VALUES ('Demo', 'demo')
-			ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name RETURNING id`).Scan(&orgID); err != nil {
+		orgID, err := forms.DefaultOrganization(ctx, pool)
+		if err != nil {
 			return err
 		}
+		var formID, versionID string
 		if err := tx.QueryRow(ctx, `
 			INSERT INTO forms (organization_id, title, description, status, draft_schema)
 			VALUES ($1, 'Onboarding empresa (KYB)', 'Completa los datos de tu empresa para abrir tu cuenta. Puedes guardar y continuar después.', 'published', $2)
@@ -107,7 +116,7 @@ func main() {
 		if _, err := tx.Exec(ctx, `UPDATE forms SET current_version_id = $2 WHERE id = $1`, formID, versionID); err != nil {
 			return err
 		}
-		_, err := tx.Exec(ctx, `INSERT INTO form_links (form_id, token, kind) VALUES ($1, $2, 'public')`, formID, linkToken)
+		_, err = tx.Exec(ctx, `INSERT INTO form_links (form_id, token, kind) VALUES ($1, $2, 'public')`, formID, linkToken)
 		return err
 	})
 	if err != nil {

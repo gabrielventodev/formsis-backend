@@ -16,10 +16,10 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/formschema"
 	"github.com/gabrielventodev/formflow/api/internal/mailer"
 	"github.com/gabrielventodev/formflow/api/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -36,6 +36,8 @@ type Handler struct {
 	WebURL string
 	// MaxUploadMB caps any single upload, even if a field allows more.
 	MaxUploadMB float64
+	// OrgID scopes the admin link routes to the MVP's single organization.
+	OrgID string
 }
 
 func (h *Handler) Routes() http.Handler {
@@ -298,7 +300,8 @@ func audit(ctx context.Context, q execer, subID, actor, action string, from, to 
 }
 
 func validEmail(s string) bool {
-	return formschema.ValidEmail(s)
+	a, err := mail.ParseAddress(s)
+	return err == nil && a.Address == s && strings.Contains(s[strings.LastIndex(s, "@")+1:], ".")
 }
 
 func greetingName(n string) string {

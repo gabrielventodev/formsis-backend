@@ -73,8 +73,11 @@ func setup(t *testing.T) (*httptest.Server, *pgxpool.Pool, string) {
 	_, err = pool.Exec(ctx, `INSERT INTO form_links (form_id, token) VALUES ($1, $2)`, formID, link)
 	must(t, err)
 
-	h := &Handler{DB: pool, Store: store, Mail: &memMail{}, WebURL: "http://web", MaxUploadMB: 5}
-	srv := httptest.NewServer(h.Routes())
+	h := &Handler{DB: pool, Store: store, Mail: &memMail{}, WebURL: "http://web", MaxUploadMB: 5, OrgID: orgID}
+	mux := http.NewServeMux()
+	mux.Handle("/admin/links/", http.StripPrefix("/admin/links", h.AdminRoutes()))
+	mux.Handle("/", h.Routes())
+	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv, pool, link
 }
@@ -296,5 +299,48 @@ func TestAccepts(t *testing.T) {
 		if got := accepts(c.accept, c.name, c.mt); got != c.want {
 			t.Errorf("accepts(%v, %s, %s) = %v", c.accept, c.name, c.mt, got)
 		}
+	}
+}
+
+func TestInviteLinks(t *testing.T) {
+	srv, pool, link := setup(t)
+	ctx := context.Background()
+	var formID string
+	must(t, pool.QueryRow(ctx, `SELECT form_id FROM form_links WHERE token = $1`, link).Scan(&formID))
+
+	if code, _ := call(t, srv, "POST", "/admin/links/", "", map[string]string{"formId": formID, "kind": "invite"}); code != 400 {
+		t.Fatalf("invite without email: %d", code)
+	}
+	code, body := call(t, srv, "POST", "/admin/links/", "", map[string]string{"formId": formID, "kind": "invite", "inviteeEmail": "rosa@empresa.cl"})
+	if code != 201 || !strings.HasPrefix(body["url"].(string), "http://web/f/") {
+		t.Fatalf("create invite: %d %v", code, body)
+	}
+	invite := body["token"].(string)
+
+	// The invitee email wins over what the applicant types, and reopening resumes the same submission.
+	_, first := call(t, srv, "POST", "/links/"+invite+"/start", "", map[string]string{"email": "otro@x.cl"})
+	_, second := call(t, srv, "POST", "/links/"+invite+"/start", "", map[string]string{})
+	if first["submissionId"] == nil || first["submissionId"] != second["submissionId"] {
+		t.Fatalf("invite resume: %v %v", first, second)
+	}
+	_, sub := call(t, srv, "GET", "/submission", second["accessToken"].(string), nil)
+	if sub["applicant"].(map[string]any)["email"] != "rosa@empresa.cl" {
+		t.Fatalf("invitee email: %v", sub["applicant"])
+	}
+
+	req, _ := http.NewRequest("GET", srv.URL+"/admin/links/?formId="+formID, nil)
+	res, err := http.DefaultClient.Do(req)
+	must(t, err)
+	var list []map[string]any
+	_ = json.NewDecoder(res.Body).Decode(&list)
+	res.Body.Close()
+	if len(list) != 2 {
+		t.Fatalf("list: %v", list)
+	}
+	if code, _ := call(t, srv, "DELETE", "/admin/links/"+body["id"].(string), "", nil); code != 204 {
+		t.Fatalf("delete: %d", code)
+	}
+	if code, _ := call(t, srv, "GET", "/links/"+invite, "", nil); code != 404 {
+		t.Fatalf("deleted link: %d", code)
 	}
 }

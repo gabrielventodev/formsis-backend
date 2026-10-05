@@ -16,6 +16,7 @@ type Server struct {
 	WebOrigin string
 	OrgID     string       // the single organization the MVP serves
 	Portal    http.Handler // public applicant API, mounted at /api/v1/portal
+	Links     http.Handler // form links and invitations, mounted at /api/v1/admin/links
 }
 
 func (s *Server) Routes() http.Handler {
@@ -30,6 +31,9 @@ func (s *Server) Routes() http.Handler {
 		r.Route("/admin/forms", s.formRoutes)
 		if s.Portal != nil {
 			r.Mount("/portal", s.Portal)
+		}
+		if s.Links != nil {
+			r.Mount("/admin/links", s.Links)
 		}
 	})
 	return r

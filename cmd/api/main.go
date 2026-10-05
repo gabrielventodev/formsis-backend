@@ -53,12 +53,13 @@ func run() error {
 	}
 	portalHandler := &portal.Handler{
 		DB: pool, Store: store, Mail: mailer.New(cfg.Mail),
-		WebURL: cfg.WebPublicURL, MaxUploadMB: cfg.MaxUploadMB,
+		WebURL: cfg.WebPublicURL, MaxUploadMB: cfg.MaxUploadMB, OrgID: orgID,
 	}
 
 	srv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           (&httpapi.Server{DB: pool, WebOrigin: cfg.WebOrigin, OrgID: orgID, Portal: portalHandler.Routes()}).Routes(),
+		Addr: cfg.Addr,
+		Handler: (&httpapi.Server{DB: pool, WebOrigin: cfg.WebOrigin, OrgID: orgID,
+			Portal: portalHandler.Routes(), Links: portalHandler.AdminRoutes()}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {

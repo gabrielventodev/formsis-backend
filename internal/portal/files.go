@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gabrielventodev/formflow/api/internal/formschema"
+	"github.com/gabrielventodev/formflow/api/internal/schema"
 	"github.com/gabrielventodev/formflow/api/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -40,7 +40,7 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 
 	fieldKey := r.FormValue("fieldKey")
 	field := s.Schema.Find(fieldKey)
-	if !fieldPathRe.MatchString(fieldKey) || field == nil || field.Type != formschema.TypeFile {
+	if !fieldPathRe.MatchString(fieldKey) || field == nil || field.Type != schema.TypeFile {
 		writeError(w, http.StatusBadRequest, "Campo de archivo no válido.")
 		return
 	}
@@ -65,8 +65,8 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	if field.MaxMB > 0 && float64(header.Size) > field.MaxMB*(1<<20) {
-		writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("El archivo supera el máximo de %s MB.", trimFloat(field.MaxMB)))
+	if field.MaxMb != nil && float64(header.Size) > *field.MaxMb*(1<<20) {
+		writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("El archivo supera el máximo de %s MB.", trimFloat(*field.MaxMb)))
 		return
 	}
 	if float64(header.Size) > limitMB*(1<<20) {
@@ -91,16 +91,6 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if !accepts(field.Accept, filename, mimeType) {
 		writeError(w, http.StatusUnsupportedMediaType, "Tipo de archivo no permitido. Formatos aceptados: "+strings.Join(field.Accept, ", ")+".")
-		return
-	}
-
-	counts, err := h.fileCounts(ctx, s.ID)
-	if err != nil {
-		serverError(w, r, err)
-		return
-	}
-	if field.MaxFiles > 0 && counts[fieldKey] >= field.MaxFiles {
-		writeError(w, http.StatusConflict, fmt.Sprintf("Máximo %d archivos en este campo.", field.MaxFiles))
 		return
 	}
 

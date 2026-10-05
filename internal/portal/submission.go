@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/formschema"
 	"github.com/gabrielventodev/formflow/api/internal/mailer"
+	"github.com/gabrielventodev/formflow/api/internal/schema"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -24,7 +24,7 @@ type submission struct {
 	Status      string
 	Data        map[string]any
 	RawSchema   json.RawMessage
-	Schema      *formschema.Schema
+	Schema      schema.Schema
 	SubmittedAt *time.Time
 	UpdatedAt   time.Time
 }
@@ -77,7 +77,7 @@ func (h *Handler) loadSubmission(ctx context.Context, q queryer, tokenHash strin
 	if s.Data == nil {
 		s.Data = map[string]any{}
 	}
-	if s.Schema, err = formschema.Parse(s.RawSchema); err != nil {
+	if s.Schema, err = schema.Parse(s.RawSchema); err != nil {
 		return nil, err
 	}
 	return &s, nil
@@ -256,14 +256,14 @@ func (h *Handler) storeData(ctx context.Context, s *submission, in map[string]an
 	return updatedAt, err
 }
 
-func (h *Handler) fileCounts(ctx context.Context, subID string) (formschema.FileCounts, error) {
+func (h *Handler) fileCounts(ctx context.Context, subID string) (schema.FileCounts, error) {
 	rows, err := h.DB.Query(ctx, `
 		SELECT field_key, count(*) FROM submission_files WHERE submission_id = $1 GROUP BY field_key`, subID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	counts := formschema.FileCounts{}
+	counts := schema.FileCounts{}
 	for rows.Next() {
 		var k string
 		var n int
@@ -290,11 +290,11 @@ func (h *Handler) validate(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, err)
 		return
 	}
-	var errs formschema.Errors
+	var errs schema.Errors
 	if req.Section != "" {
 		errs = s.Schema.ValidateSection(req.Section, s.Data, counts)
 	} else {
-		errs = s.Schema.Validate(s.Data, counts)
+		errs = s.Schema.ValidateAnswers(s.Data, counts)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"valid": len(errs) == 0, "errors": errs})
 }
@@ -317,7 +317,7 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 	token, _ := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 	var (
 		s       *submission
-		errs    formschema.Errors
+		errs    schema.Errors
 		from    string
 		problem string
 	)
@@ -335,7 +335,7 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			return err
 		}
-		if errs = s.Schema.Validate(s.Data, counts); len(errs) > 0 {
+		if errs = s.Schema.ValidateAnswers(s.Data, counts); len(errs) > 0 {
 			return nil
 		}
 		if _, err := tx.Exec(ctx, `
