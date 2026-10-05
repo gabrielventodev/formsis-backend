@@ -9,8 +9,10 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gabrielventodev/formflow/api/internal/auth"
 	"github.com/gabrielventodev/formflow/api/internal/db"
@@ -18,9 +20,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// Integration tests run against a real Postgres. Set TEST_DATABASE_URL to an
-// empty, disposable database, e.g.
-// postgres://formflow:formflow@localhost:5432/formflow_test?sslmode=disable
+// Integration tests run against a real Postgres when TEST_DATABASE_URL is set.
+// Each run creates its own organization, so existing data is left alone.
 func adminTestServer(t *testing.T) (*httptest.Server, *pgxpool.Pool) {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
@@ -33,9 +34,6 @@ func adminTestServer(t *testing.T) (*httptest.Server, *pgxpool.Pool) {
 		t.Fatal(err)
 	}
 	t.Cleanup(pool.Close)
-	if _, err := pool.Exec(ctx, `DROP SCHEMA public CASCADE; CREATE SCHEMA public;`); err != nil {
-		t.Fatal(err)
-	}
 	if err := db.Migrate(ctx, pool); err != nil {
 		t.Fatal(err)
 	}
@@ -80,21 +78,24 @@ func (c *client) do(method, path string, body any) (int, []byte) {
 	return res.StatusCode, out
 }
 
-func seed(t *testing.T, pool *pgxpool.Pool) (subID, fileID string) {
+func seed(t *testing.T, pool *pgxpool.Pool) (email, subID, fileID string) {
 	t.Helper()
 	ctx := context.Background()
-	store := &auth.Store{DB: pool}
-	if _, err := store.EnsureAdmin(ctx, "admin@example.com", "secreto-123", "Ana Admin", "Acme"); err != nil {
-		t.Fatal(err)
-	}
-	var orgID, formID, versionID string
+	var orgID, userID, formID, versionID string
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	must(pool.QueryRow(ctx, `SELECT id FROM organizations`).Scan(&orgID))
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 36)
+	email = "admin-" + suffix + "@example.com"
+	hash, err := auth.HashPassword("secreto-123")
+	must(err)
+	must(pool.QueryRow(ctx, `INSERT INTO organizations (name, slug) VALUES ('Acme', $1) RETURNING id`, "acme-"+suffix).Scan(&orgID))
+	must(pool.QueryRow(ctx, `INSERT INTO users (email, name, password_hash) VALUES ($1, 'Ana Admin', $2) RETURNING id`, email, hash).Scan(&userID))
+	_, err = pool.Exec(ctx, `INSERT INTO memberships (user_id, organization_id, role) VALUES ($1, $2, 'owner')`, userID, orgID)
+	must(err)
 	must(pool.QueryRow(ctx, `INSERT INTO forms (organization_id, title, status) VALUES ($1, 'Onboarding empresa', 'published') RETURNING id`, orgID).Scan(&formID))
 	schema := `{"sections":[{"key":"empresa","title":"Empresa","fields":[
 		{"key":"razon_social","type":"text","label":"Razón social"},
@@ -104,22 +105,22 @@ func seed(t *testing.T, pool *pgxpool.Pool) (subID, fileID string) {
 	must(pool.QueryRow(ctx, `
 		INSERT INTO submissions (organization_id, form_id, form_version_id, applicant_email, applicant_name,
 		                         access_token_hash, status, data, submitted_at)
-		VALUES ($1, $2, $3, 'pedro@cliente.cl', 'Pedro Pérez', 'h1', 'submitted',
+		VALUES ($1, $2, $3, 'pedro@cliente.cl', 'Pedro Pérez', $4, 'submitted',
 		        '{"razon_social":"=Cliente SpA","socios":[{"nombre":"Pedro"}]}', now())
-		RETURNING id`, orgID, formID, versionID).Scan(&subID))
-	_, err := pool.Exec(ctx, `
+		RETURNING id`, orgID, formID, versionID, "h1-"+suffix).Scan(&subID))
+	_, err = pool.Exec(ctx, `
 		INSERT INTO submissions (organization_id, form_id, form_version_id, applicant_email, access_token_hash)
-		VALUES ($1, $2, $3, 'borrador@cliente.cl', 'h2')`, orgID, formID, versionID)
+		VALUES ($1, $2, $3, 'borrador@cliente.cl', $4)`, orgID, formID, versionID, "h2-"+suffix)
 	must(err)
 	must(pool.QueryRow(ctx, `
 		INSERT INTO submission_files (submission_id, field_key, storage_key, filename, mime_type, size_bytes)
 		VALUES ($1, 'estatutos', 'estatutos.pdf', 'Estatutos 2024.pdf', 'application/pdf', 13) RETURNING id`, subID).Scan(&fileID))
-	return subID, fileID
+	return email, subID, fileID
 }
 
 func TestAdminReviewFlow(t *testing.T) {
 	srv, pool := adminTestServer(t)
-	subID, fileID := seed(t, pool)
+	email, subID, fileID := seed(t, pool)
 	c := newClient(t, srv.URL)
 
 	if code, _ := c.do("GET", "/api/v1/admin/submissions", nil); code != http.StatusUnauthorized {
@@ -128,10 +129,10 @@ func TestAdminReviewFlow(t *testing.T) {
 	if code, _ := c.do("GET", "/api/v1/admin/forms", nil); code != http.StatusUnauthorized {
 		t.Fatalf("anonymous form builder: got %d, want 401", code)
 	}
-	if code, _ := c.do("POST", "/api/v1/auth/login", map[string]string{"email": "admin@example.com", "password": "mala"}); code != http.StatusUnauthorized {
+	if code, _ := c.do("POST", "/api/v1/auth/login", map[string]string{"email": email, "password": "mala"}); code != http.StatusUnauthorized {
 		t.Fatalf("bad password: got %d", code)
 	}
-	if code, body := c.do("POST", "/api/v1/auth/login", map[string]string{"email": "ADMIN@example.com", "password": "secreto-123"}); code != http.StatusOK {
+	if code, body := c.do("POST", "/api/v1/auth/login", map[string]string{"email": strings.ToUpper(email), "password": "secreto-123"}); code != http.StatusOK {
 		t.Fatalf("login: %d %s", code, body)
 	}
 	code, body := c.do("GET", "/api/v1/auth/me", nil)
