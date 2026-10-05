@@ -14,6 +14,7 @@ import (
 type Server struct {
 	DB        *pgxpool.Pool
 	WebOrigin string
+	OrgID     string // the single organization the MVP serves
 }
 
 func (s *Server) Routes() http.Handler {
@@ -25,6 +26,7 @@ func (s *Server) Routes() http.Handler {
 	r.Get("/healthz", s.health)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", s.health)
+		r.Route("/admin/forms", s.formRoutes)
 	})
 	return r
 }
