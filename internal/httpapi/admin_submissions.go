@@ -543,10 +543,16 @@ func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	email, err := s.decisionEmail(ctx, tx, subID, in.To, in.Comment, fieldComments)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	if err := tx.Commit(ctx); err != nil {
 		s.serverError(w, r, err)
 		return
 	}
+	s.sendAsync(email)
 	writeJSON(w, http.StatusOK, map[string]string{"status": in.To})
 }
 

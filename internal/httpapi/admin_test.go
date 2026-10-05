@@ -16,13 +16,33 @@ import (
 
 	"github.com/gabrielventodev/formflow/api/internal/auth"
 	"github.com/gabrielventodev/formflow/api/internal/db"
+	"github.com/gabrielventodev/formflow/api/internal/mailer"
 	"github.com/gabrielventodev/formflow/api/internal/storage"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // Integration tests run against a real Postgres when TEST_DATABASE_URL is set.
 // Each run creates its own organization, so existing data is left alone.
-func adminTestServer(t *testing.T) (*httptest.Server, *pgxpool.Pool) {
+// fakeMail records emails; sends happen in a goroutine, so tests read from the channel.
+type fakeMail chan mailer.Message
+
+func (f fakeMail) Send(_ context.Context, m mailer.Message) error {
+	f <- m
+	return nil
+}
+
+func (f fakeMail) next(t *testing.T) mailer.Message {
+	t.Helper()
+	select {
+	case m := <-f:
+		return m
+	case <-time.After(2 * time.Second):
+		t.Fatal("no email sent")
+		return mailer.Message{}
+	}
+}
+
+func adminTestServer(t *testing.T) (*httptest.Server, *pgxpool.Pool, fakeMail) {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
@@ -44,9 +64,11 @@ func adminTestServer(t *testing.T) (*httptest.Server, *pgxpool.Pool) {
 	if err := store.Put(ctx, "estatutos.pdf", strings.NewReader("%PDF-1.4 test"), 13, "application/pdf"); err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer((&Server{DB: pool, OrgID: "unused", WebOrigin: "http://localhost:3000", Files: store}).Routes())
+	mail := make(fakeMail, 10)
+	srv := httptest.NewServer((&Server{DB: pool, OrgID: "unused", WebOrigin: "http://localhost:3000", Files: store,
+		Mail: mail, WebURL: "https://forms.example.com"}).Routes())
 	t.Cleanup(srv.Close)
-	return srv, pool
+	return srv, pool, mail
 }
 
 type client struct {
@@ -119,7 +141,7 @@ func seed(t *testing.T, pool *pgxpool.Pool) (email, subID, fileID string) {
 }
 
 func TestAdminReviewFlow(t *testing.T) {
-	srv, pool := adminTestServer(t)
+	srv, pool, mail := adminTestServer(t)
 	email, subID, fileID := seed(t, pool)
 	c := newClient(t, srv.URL)
 
@@ -183,6 +205,16 @@ func TestAdminReviewFlow(t *testing.T) {
 	if code != http.StatusOK {
 		t.Fatalf("request changes: %d %s", code, body)
 	}
+	// The applicant gets an email naming the field and a fresh magic link.
+	m := mail.next(t)
+	if m.To != "pedro@cliente.cl" || !strings.Contains(m.Text, "Estatutos: Sube la versión firmada") ||
+		!strings.Contains(m.Text, "https://forms.example.com/s/") || !strings.Contains(m.Text, "Faltan documentos") {
+		t.Fatalf("changes email: %+v", m)
+	}
+	var hash string
+	if err := pool.QueryRow(context.Background(), `SELECT access_token_hash FROM submissions WHERE id = $1`, subID).Scan(&hash); err != nil || strings.HasPrefix(hash, "h1-") {
+		t.Fatalf("access token not rotated: %q %v", hash, err)
+	}
 
 	if code, _ := c.do("POST", "/api/v1/admin/submissions/"+subID+"/comments", map[string]string{"body": "Llamé al cliente"}); code != http.StatusCreated {
 		t.Fatalf("comment: %d", code)
@@ -200,6 +232,9 @@ func TestAdminReviewFlow(t *testing.T) {
 	}
 	if code, body := c.do("POST", "/api/v1/admin/submissions/"+subID+"/transition", map[string]string{"to": "approved"}); code != http.StatusOK {
 		t.Fatalf("approve: %d %s", code, body)
+	}
+	if m := mail.next(t); !strings.HasPrefix(m.Subject, "Solicitud aprobada") {
+		t.Fatalf("approve email: %+v", m)
 	}
 
 	var detail struct {

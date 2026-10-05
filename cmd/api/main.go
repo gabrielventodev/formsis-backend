@@ -62,8 +62,9 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	mail := mailer.New(cfg.Mail)
 	portalHandler := &portal.Handler{
-		DB: pool, Store: store, Mail: mailer.New(cfg.Mail),
+		DB: pool, Store: store, Mail: mail,
 		WebURL: cfg.WebPublicURL, MaxUploadMB: cfg.MaxUploadMB, OrgID: orgID,
 	}
 
@@ -77,6 +78,8 @@ func run() error {
 			Files:        store,
 			Portal:       portalHandler.Routes(),
 			Links:        portalHandler.AdminRoutes(),
+			Mail:         mail,
+			WebURL:       cfg.WebPublicURL,
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
