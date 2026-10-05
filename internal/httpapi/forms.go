@@ -28,7 +28,7 @@ func (s *Server) formRoutes(r chi.Router) {
 		r.Post("/duplicate", s.duplicateForm)
 		r.Post("/archive", s.archiveForm(true))
 		r.Post("/restore", s.archiveForm(false))
-		r.Post("/validate", s.validateForm)
+		r.Get("/validate", s.validateForm)
 		r.Get("/versions", s.listVersions)
 		r.Get("/versions/{number}", s.getVersion)
 	})
