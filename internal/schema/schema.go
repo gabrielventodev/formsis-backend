@@ -1,0 +1,244 @@
+// Package schema defines the JSON shape of a form (sections, fields, validations
+// and conditions) and validates it. The same shape is mirrored in web/src/lib/form-schema.ts.
+package schema
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"regexp"
+	"strings"
+)
+
+type FieldType string
+
+const (
+	TypeText        FieldType = "text"
+	TypeTextarea    FieldType = "textarea"
+	TypeEmail       FieldType = "email"
+	TypePhone       FieldType = "phone"
+	TypeNumber      FieldType = "number"
+	TypeDate        FieldType = "date"
+	TypeSelect      FieldType = "select"
+	TypeMultiselect FieldType = "multiselect"
+	TypeCheckbox    FieldType = "checkbox"
+	TypeFile        FieldType = "file"
+	TypeID          FieldType = "id"
+	TypeRepeater    FieldType = "repeater"
+)
+
+var knownTypes = map[FieldType]bool{
+	TypeText: true, TypeTextarea: true, TypeEmail: true, TypePhone: true, TypeNumber: true,
+	TypeDate: true, TypeSelect: true, TypeMultiselect: true, TypeCheckbox: true, TypeFile: true,
+	TypeID: true, TypeRepeater: true,
+}
+
+// ID document kinds with built-in check-digit or format validation.
+var knownIDKinds = map[string]bool{"rut": true, "dni": true, "other": true}
+
+type ConditionOp string
+
+var knownOps = map[ConditionOp]bool{
+	"eq": true, "neq": true, "contains": true, "empty": true, "notEmpty": true,
+}
+
+// Condition shows the field or section only when another field matches.
+type Condition struct {
+	Field string      `json:"field"`
+	Op    ConditionOp `json:"op"`
+	Value any         `json:"value,omitempty"`
+}
+
+type Field struct {
+	Key         string    `json:"key"`
+	Type        FieldType `json:"type"`
+	Label       string    `json:"label"`
+	Help        string    `json:"help,omitempty"`
+	Placeholder string    `json:"placeholder,omitempty"`
+	Required    bool      `json:"required,omitempty"`
+	// Number value range, text length range, or repeater item count.
+	Min     *float64 `json:"min,omitempty"`
+	Max     *float64 `json:"max,omitempty"`
+	Pattern string   `json:"pattern,omitempty"`
+	// Message shown when Pattern does not match.
+	PatternMessage string     `json:"patternMessage,omitempty"`
+	Options        []string   `json:"options,omitempty"`
+	Accept         []string   `json:"accept,omitempty"`
+	MaxMb          *float64   `json:"maxMb,omitempty"`
+	IDKind         string     `json:"idKind,omitempty"`
+	Fields         []Field    `json:"fields,omitempty"` // repeater sub-fields
+	ShowIf         *Condition `json:"showIf,omitempty"`
+}
+
+// Section is one step of a multi-step form.
+type Section struct {
+	Key         string     `json:"key"`
+	Title       string     `json:"title"`
+	Description string     `json:"description,omitempty"`
+	Fields      []Field    `json:"fields"`
+	ShowIf      *Condition `json:"showIf,omitempty"`
+}
+
+type Schema struct {
+	Sections []Section `json:"sections"`
+}
+
+// Parse decodes a schema, rejecting unknown properties so typos don't get stored silently.
+func Parse(raw []byte) (Schema, error) {
+	var s Schema
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&s); err != nil {
+		return s, fmt.Errorf("esquema inválido: %w", err)
+	}
+	if s.Sections == nil {
+		s.Sections = []Section{}
+	}
+	return s, nil
+}
+
+// Problem is one validation error, located by a path like "sections[0].fields[2].label".
+type Problem struct {
+	Path    string `json:"path"`
+	Message string `json:"message"`
+}
+
+var keyRe = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
+
+// Validate checks that a schema can be published. Drafts may be saved with problems;
+// publishing requires none.
+func Validate(s Schema) []Problem {
+	v := validator{seen: map[string]FieldType{}, sections: map[string]bool{}}
+	if len(s.Sections) == 0 {
+		v.add("sections", "El formulario necesita al menos una sección")
+	}
+	for i, sec := range s.Sections {
+		p := fmt.Sprintf("sections[%d]", i)
+		if !keyRe.MatchString(sec.Key) {
+			v.add(p+".key", "Clave inválida: usa minúsculas, números y guion bajo, empezando por letra")
+		} else if v.sections[sec.Key] {
+			v.add(p+".key", fmt.Sprintf("La clave de sección %q está repetida", sec.Key))
+		}
+		v.sections[sec.Key] = true
+		if strings.TrimSpace(sec.Title) == "" {
+			v.add(p+".title", "La sección necesita un título")
+		}
+		if len(sec.Fields) == 0 {
+			v.add(p+".fields", "La sección necesita al menos un campo")
+		}
+		// A section can depend only on fields from earlier sections.
+		if sec.ShowIf != nil {
+			v.condition(p+".showIf", *sec.ShowIf, "")
+		}
+		for j, f := range sec.Fields {
+			v.field(fmt.Sprintf("%s.fields[%d]", p, j), f, false)
+		}
+	}
+	return v.problems
+}
+
+type validator struct {
+	problems []Problem
+	seen     map[string]FieldType // top-level field keys declared so far, in order
+	sections map[string]bool
+}
+
+func (v *validator) add(path, msg string) {
+	v.problems = append(v.problems, Problem{Path: path, Message: msg})
+}
+
+func (v *validator) field(p string, f Field, nested bool) {
+	if !keyRe.MatchString(f.Key) {
+		v.add(p+".key", "Clave inválida: usa minúsculas, números y guion bajo, empezando por letra")
+	}
+	if !knownTypes[f.Type] {
+		v.add(p+".type", fmt.Sprintf("Tipo de campo desconocido %q", f.Type))
+		return
+	}
+	if strings.TrimSpace(f.Label) == "" {
+		v.add(p+".label", "El campo necesita una etiqueta")
+	}
+	if f.Min != nil && f.Max != nil && *f.Min > *f.Max {
+		v.add(p+".min", "El mínimo no puede ser mayor que el máximo")
+	}
+	if f.Pattern != "" {
+		if _, err := regexp.Compile(f.Pattern); err != nil {
+			v.add(p+".pattern", "La expresión regular no es válida")
+		}
+	}
+	switch f.Type {
+	case TypeSelect, TypeMultiselect:
+		if len(f.Options) == 0 {
+			v.add(p+".options", "Agrega al menos una opción")
+		}
+		dup := map[string]bool{}
+		for k, o := range f.Options {
+			if strings.TrimSpace(o) == "" {
+				v.add(fmt.Sprintf("%s.options[%d]", p, k), "La opción no puede estar vacía")
+			} else if dup[o] {
+				v.add(fmt.Sprintf("%s.options[%d]", p, k), fmt.Sprintf("La opción %q está repetida", o))
+			}
+			dup[o] = true
+		}
+	case TypeFile:
+		if f.MaxMb != nil && (*f.MaxMb <= 0 || *f.MaxMb > 100) {
+			v.add(p+".maxMb", "El tamaño máximo debe estar entre 0 y 100 MB")
+		}
+	case TypeID:
+		if !knownIDKinds[f.IDKind] {
+			v.add(p+".idKind", "Elige el tipo de documento (RUT, DNI u otro)")
+		}
+	case TypeRepeater:
+		if nested {
+			v.add(p+".type", "Un grupo repetible no puede contener otro grupo repetible")
+			return
+		}
+		if len(f.Fields) == 0 {
+			v.add(p+".fields", "El grupo repetible necesita al menos un campo")
+		}
+		sub := map[string]bool{}
+		for k, sf := range f.Fields {
+			sp := fmt.Sprintf("%s.fields[%d]", p, k)
+			if sub[sf.Key] {
+				v.add(sp+".key", fmt.Sprintf("La clave %q está repetida dentro del grupo", sf.Key))
+			}
+			sub[sf.Key] = true
+			if sf.ShowIf != nil {
+				v.add(sp+".showIf", "Los campos dentro de un grupo repetible no admiten condiciones")
+			}
+			v.field(sp, sf, true)
+		}
+	}
+	if nested {
+		return
+	}
+	if f.ShowIf != nil {
+		v.condition(p+".showIf", *f.ShowIf, f.Key)
+	}
+	if _, dup := v.seen[f.Key]; dup && keyRe.MatchString(f.Key) {
+		v.add(p+".key", fmt.Sprintf("La clave %q está repetida", f.Key))
+	}
+	v.seen[f.Key] = f.Type
+}
+
+// condition checks that a showIf points at a field declared before it.
+func (v *validator) condition(p string, c Condition, self string) {
+	if !knownOps[c.Op] {
+		v.add(p+".op", "Operador de condición desconocido")
+	}
+	if c.Field == self {
+		v.add(p+".field", "Un campo no puede depender de sí mismo")
+		return
+	}
+	t, ok := v.seen[c.Field]
+	if !ok {
+		v.add(p+".field", "La condición debe referirse a un campo anterior del formulario")
+		return
+	}
+	if t == TypeRepeater || t == TypeFile {
+		v.add(p+".field", "No se puede usar un grupo repetible o un archivo en una condición")
+	}
+	if (c.Op == "eq" || c.Op == "neq" || c.Op == "contains") && c.Value == nil {
+		v.add(p+".value", "Indica el valor a comparar")
+	}
+}

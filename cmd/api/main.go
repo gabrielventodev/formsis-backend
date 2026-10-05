@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/gabrielventodev/formflow/api/internal/config"
 	"github.com/gabrielventodev/formflow/api/internal/db"
+	"github.com/gabrielventodev/formflow/api/internal/forms"
 	"github.com/gabrielventodev/formflow/api/internal/httpapi"
 )
 
@@ -38,9 +40,14 @@ func run() error {
 	}
 	slog.Info("migrations applied")
 
+	orgID, err := forms.DefaultOrganization(ctx, pool)
+	if err != nil {
+		return fmt.Errorf("load organization: %w", err)
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           (&httpapi.Server{DB: pool, WebOrigin: cfg.WebOrigin}).Routes(),
+		Handler:           (&httpapi.Server{DB: pool, WebOrigin: cfg.WebOrigin, OrgID: orgID}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
