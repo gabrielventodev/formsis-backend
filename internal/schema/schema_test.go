@@ -75,7 +75,13 @@ func TestValidateProblems(t *testing.T) {
 		{"radio without options", `{"sections":[{"key":"a","title":"A","fields":[{"key":"x","type":"radio","label":"X"}]}]}`, "sections[0].fields[0].options", "al menos una opción"},
 		{"scale too wide", `{"sections":[{"key":"a","title":"A","fields":[{"key":"x","type":"scale","label":"X","max":20}]}]}`, "sections[0].fields[0].min", "escala"},
 		{"info in repeater", `{"sections":[{"key":"a","title":"A","fields":[{"key":"r","type":"repeater","label":"R","fields":[
-			{"key":"i","type":"info","label":"I"}]}]}]}`, "sections[0].fields[0].fields[0].type", "bloques de texto"},
+			{"key":"i","type":"info","label":"I"}]}]}]}`, "sections[0].fields[0].fields[0].type", "separadores"},
+		{"divider in repeater", `{"sections":[{"key":"a","title":"A","fields":[{"key":"r","type":"repeater","label":"R","fields":[
+			{"key":"d","type":"divider"}]}]}]}`, "sections[0].fields[0].fields[0].type", "separadores"},
+		{"heading without text", `{"sections":[{"key":"a","title":"A","fields":[{"key":"h","type":"heading"}]}]}`, "sections[0].fields[0].label", "etiqueta"},
+		{"condition on heading", `{"sections":[{"key":"a","title":"A","fields":[
+			{"key":"h","type":"heading","label":"H"},
+			{"key":"y","type":"text","label":"Y","showIf":{"field":"h","op":"notEmpty"}}]}]}`, "sections[0].fields[1].showIf.field", "condición"},
 		{"condition on address", `{"sections":[{"key":"a","title":"A","fields":[
 			{"key":"x","type":"address","label":"X"},
 			{"key":"y","type":"text","label":"Y","showIf":{"field":"x","op":"notEmpty"}}]}]}`, "sections[0].fields[1].showIf.field", "condición"},

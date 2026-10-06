@@ -36,7 +36,11 @@ const (
 	TypeAddress     FieldType = "address"   // object, see AddressParts
 	TypeScale       FieldType = "scale"     // integer between Min (default 1) and Max (default 5)
 	TypeSignature   FieldType = "signature" // SVG path data drawn by the applicant
-	TypeInfo        FieldType = "info"      // heading and text, no answer
+	// Display blocks: they lay out the form and collect no answer.
+	TypeInfo    FieldType = "info"    // highlighted note with title and text
+	TypeHeading FieldType = "heading" // title (Label) with optional subtitle (Help)
+	TypeDivider FieldType = "divider" // horizontal line, optional caption in Label
+	TypeSpacer  FieldType = "spacer"  // blank vertical space
 )
 
 var knownTypes = map[FieldType]bool{
@@ -44,7 +48,8 @@ var knownTypes = map[FieldType]bool{
 	TypeDate: true, TypeSelect: true, TypeMultiselect: true, TypeCheckbox: true, TypeFile: true,
 	TypeID: true, TypeRepeater: true, TypeURL: true, TypeCurrency: true, TypeTime: true,
 	TypeDateTime: true, TypeYesNo: true, TypeRadio: true, TypeCountry: true, TypeAddress: true,
-	TypeScale: true, TypeSignature: true, TypeInfo: true,
+	TypeScale: true, TypeSignature: true, TypeInfo: true, TypeHeading: true, TypeDivider: true,
+	TypeSpacer: true,
 }
 
 // YesNo are the only answers a yesno field accepts.
@@ -53,16 +58,26 @@ var YesNo = []string{"Sí", "No"}
 // AddressParts are the keys of an address answer, in display order.
 var AddressParts = []string{"line1", "line2", "city", "region", "postalCode", "country"}
 
+// IsDisplay reports whether the type is a display block (title, line, space, note) that
+// collects no answer, is never required and is not shown to reviewers.
+func (t FieldType) IsDisplay() bool {
+	switch t {
+	case TypeInfo, TypeHeading, TypeDivider, TypeSpacer:
+		return true
+	}
+	return false
+}
+
 // HasAnswer reports whether the type collects a value from the applicant.
-func (t FieldType) HasAnswer() bool { return t != TypeInfo }
+func (t FieldType) HasAnswer() bool { return !t.IsDisplay() }
 
 // Conditionable reports whether other fields may depend on a field of this type.
 func (t FieldType) Conditionable() bool {
 	switch t {
-	case TypeRepeater, TypeFile, TypeAddress, TypeSignature, TypeInfo:
+	case TypeRepeater, TypeFile, TypeAddress, TypeSignature:
 		return false
 	}
-	return true
+	return !t.IsDisplay()
 }
 
 // ID document kinds with built-in check-digit or format validation.
@@ -188,7 +203,8 @@ func (v *validator) field(p string, f Field, nested bool) {
 		v.add(p+".type", fmt.Sprintf("Tipo de campo desconocido %q", f.Type))
 		return
 	}
-	if strings.TrimSpace(f.Label) == "" {
+	// Lines and spaces need no text; every other block or field does.
+	if strings.TrimSpace(f.Label) == "" && f.Type != TypeDivider && f.Type != TypeSpacer {
 		v.add(p+".label", "El campo necesita una etiqueta")
 	}
 	if f.Min != nil && f.Max != nil && *f.Min > *f.Max {
@@ -230,9 +246,9 @@ func (v *validator) field(p string, f Field, nested bool) {
 		if lo != math.Trunc(lo) || hi != math.Trunc(hi) || lo < 0 || hi > 10 || lo >= hi {
 			v.add(p+".min", "La escala va de un entero a otro mayor, entre 0 y 10")
 		}
-	case TypeInfo:
+	case TypeInfo, TypeHeading, TypeDivider, TypeSpacer:
 		if nested {
-			v.add(p+".type", "Un grupo repetible no puede contener bloques de texto")
+			v.add(p+".type", "Un grupo repetible no puede contener títulos, separadores ni textos")
 		}
 	case TypeRepeater:
 		if nested {

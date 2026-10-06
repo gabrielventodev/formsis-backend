@@ -85,6 +85,9 @@ const kycExtra = `{
     "key": "datos", "title": "Datos",
     "fields": [
       { "key": "aviso", "type": "info", "label": "Antes de empezar", "help": "Ten a mano tu cédula" },
+      { "key": "titulo", "type": "heading", "label": "Tu empresa", "help": "Datos generales", "required": true },
+      { "key": "linea", "type": "divider" },
+      { "key": "espacio", "type": "spacer" },
       { "key": "web", "type": "url", "label": "Sitio web" },
       { "key": "ingresos", "type": "currency", "currency": "CLP", "label": "Ingresos", "min": 0, "required": true },
       { "key": "hora", "type": "time", "label": "Hora de contacto" },
@@ -139,7 +142,7 @@ func TestNewFieldTypes(t *testing.T) {
 			}
 		})
 	}
-	if out := s.Clean(answers(t, `{`+ok+`}`)); out["aviso"] != nil || out["domicilio"] == nil {
+	if out := s.Clean(answers(t, `{`+ok+`,"linea":"x","titulo":"y"}`)); out["aviso"] != nil || out["linea"] != nil || out["titulo"] != nil || out["domicilio"] == nil {
 		t.Errorf("Clean kept info or dropped address: %v", out)
 	}
 }
