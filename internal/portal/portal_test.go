@@ -204,6 +204,11 @@ func TestPortalFlow(t *testing.T) {
 		t.Fatalf("validate: %v", body)
 	}
 
+	var hookID string
+	must(t, pool.QueryRow(ctx, `
+		INSERT INTO webhooks (organization_id, url, secret, events)
+		SELECT organization_id, 'https://hooks.example.com', 'whsec_test', ARRAY['submission.submitted']
+		FROM submissions WHERE access_token_hash = $1 RETURNING id`, hashToken(tok)).Scan(&hookID))
 	code, body = call(t, srv, "POST", "/submission/submit", tok, map[string]any{"data": map[string]any{"nombre": "Acme", "tipo": "SpA", "monto": 10}})
 	if code != 200 {
 		t.Fatalf("submit: %d %v", code, body)
@@ -241,6 +246,19 @@ func TestPortalFlow(t *testing.T) {
 	must(t, pool.QueryRow(ctx, `SELECT count(*) FROM review_comments WHERE submission_id = $1 AND resolved_at IS NULL`, subID).Scan(&open))
 	if data["nombre"] != "Acme" || data["monto"] != float64(99) || open != 0 {
 		t.Fatalf("after resubmit: %v open=%d", data, open)
+	}
+
+	// Both submissions queued a webhook delivery.
+	var resubmitted []string
+	hookRows, _ := pool.Query(ctx, `SELECT payload->'data'->>'resubmitted' FROM webhook_deliveries WHERE webhook_id = $1 ORDER BY created_at`, hookID)
+	for hookRows.Next() {
+		var v string
+		_ = hookRows.Scan(&v)
+		resubmitted = append(resubmitted, v)
+	}
+	hookRows.Close()
+	if strings.Join(resubmitted, ",") != "false,true" {
+		t.Fatalf("webhook deliveries: %v", resubmitted)
 	}
 
 	var actions []string

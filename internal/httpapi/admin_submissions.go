@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gabrielventodev/formflow/api/internal/auth"
+	"github.com/gabrielventodev/formflow/api/internal/webhooks"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )
@@ -627,6 +628,17 @@ func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	hook := webhooks.SubmissionEvent{Type: webhooks.StatusEvent(to), SubmissionID: subID, FromStatus: from, WebURL: s.WebURL}
+	if step != nil {
+		hook.Extra = map[string]any{"step": map[string]any{"number": step.index + 1, "name": step.name, "final": step.final}}
+		if !step.final {
+			hook.Type = webhooks.EventStepApproved
+		}
+	}
+	if err := webhooks.EnqueueSubmission(ctx, tx, hook); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 	email, err := s.decisionEmail(ctx, tx, subID, from, to, in.Comment, fieldComments)
 	if err != nil {
 		s.serverError(w, r, err)
@@ -637,6 +649,7 @@ func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.sendAsync(email)
+	s.Webhooks.Kick()
 	writeJSON(w, http.StatusOK, map[string]any{"status": to, "approval_step": nextStep})
 }
 

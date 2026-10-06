@@ -26,6 +26,10 @@ type Config struct {
 
 	// CookieSecure marks the session cookie Secure; enable it behind HTTPS.
 	CookieSecure bool
+
+	// WebhooksAllowInsecure lets webhook endpoints use plain HTTP and private
+	// or local addresses. Only for development.
+	WebhooksAllowInsecure bool
 }
 
 func Load() Config {
@@ -59,6 +63,8 @@ func Load() Config {
 		AdminName:     env("ADMIN_NAME", "Administrador"),
 		OrgName:       env("ORG_NAME", "Mi organización"),
 		CookieSecure:  os.Getenv("COOKIE_SECURE") == "true",
+
+		WebhooksAllowInsecure: os.Getenv("WEBHOOKS_ALLOW_INSECURE") == "true",
 	}
 }
 

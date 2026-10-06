@@ -21,6 +21,7 @@ import (
 	"github.com/gabrielventodev/formflow/api/internal/mailer"
 	"github.com/gabrielventodev/formflow/api/internal/portal"
 	"github.com/gabrielventodev/formflow/api/internal/storage"
+	"github.com/gabrielventodev/formflow/api/internal/webhooks"
 )
 
 func main() {
@@ -76,9 +77,15 @@ func run() error {
 		}
 		return mb, nil
 	}}
+	hooks := webhooks.NewWorker(pool, cfg.WebhooksAllowInsecure)
+	if cfg.WebhooksAllowInsecure {
+		slog.Warn("WEBHOOKS_ALLOW_INSECURE is on: webhooks may target http:// and private addresses")
+	}
+	go hooks.Run(ctx)
 	portalHandler := &portal.Handler{
 		DB: pool, Store: store, Mail: mail,
 		WebURL: cfg.WebPublicURL, MaxUploadMB: cfg.MaxUploadMB, OrgID: orgID,
+		Webhooks: hooks,
 	}
 
 	srv := &http.Server{
@@ -94,6 +101,7 @@ func run() error {
 			Mail:         mail,
 			WebURL:       cfg.WebPublicURL,
 			Uploads:      store,
+			Webhooks:     hooks,
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

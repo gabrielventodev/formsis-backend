@@ -8,6 +8,7 @@ import (
 
 	"github.com/gabrielventodev/formflow/api/internal/mailer"
 	"github.com/gabrielventodev/formflow/api/internal/storage"
+	"github.com/gabrielventodev/formflow/api/internal/webhooks"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -18,12 +19,13 @@ type Server struct {
 	WebOrigin    string
 	OrgID        string // the single organization the MVP serves
 	CookieSecure bool
-	Files        FileOpener    // reads submission_files.storage_key for the review panel
-	Portal       http.Handler  // public applicant API, mounted at /api/v1/portal
-	Links        http.Handler  // form links and invitations, mounted at /api/v1/admin/links
-	Mail         mailer.Mailer // notifies applicants of review decisions (nil = no emails)
-	WebURL       string        // public web URL used in applicant links
-	Uploads      storage.Store // stores the organization logo (nil = logo uploads disabled)
+	Files        FileOpener       // reads submission_files.storage_key for the review panel
+	Portal       http.Handler     // public applicant API, mounted at /api/v1/portal
+	Links        http.Handler     // form links and invitations, mounted at /api/v1/admin/links
+	Mail         mailer.Mailer    // notifies applicants of review decisions (nil = no emails)
+	WebURL       string           // public web URL used in applicant links
+	Uploads      storage.Store    // stores the organization logo (nil = logo uploads disabled)
+	Webhooks     *webhooks.Worker // sends queued webhook deliveries (nil = queued only)
 }
 
 func (s *Server) Routes() http.Handler {
@@ -65,6 +67,7 @@ func (s *Server) Routes() http.Handler {
 				r.Put("/organization", s.updateOrganization)
 				r.Post("/organization/logo", s.uploadLogo)
 				r.Delete("/organization/logo", s.deleteLogo)
+				r.Route("/webhooks", s.webhookRoutes)
 			})
 			r.Route("/team", s.teamRoutes)
 			s.adminRoutes(r)
