@@ -31,9 +31,11 @@ const demoSchema = `{
         { "key": "fecha_constitucion", "type": "date", "label": "Fecha de constitución",
           "showIf": { "field": "tipo", "op": "neq", "value": "Persona natural con giro" } },
         { "key": "actividad", "type": "textarea", "label": "Actividad principal", "help": "Describe en pocas líneas a qué se dedica la empresa." },
+        { "key": "sitio_web", "type": "url", "label": "Sitio web" },
+        { "key": "domicilio", "type": "address", "label": "Domicilio comercial", "required": true },
         { "key": "productos", "type": "multiselect", "label": "Productos de interés", "required": true,
           "options": ["Cuenta corriente", "Pagos internacionales", "Crédito", "Factoring"] },
-        { "key": "monto_mensual", "type": "number", "label": "Monto mensual estimado (USD)", "min": 0 }
+        { "key": "monto_mensual", "type": "currency", "currency": "USD", "label": "Monto mensual estimado", "min": 0 }
       ]
     },
     {
@@ -44,6 +46,16 @@ const demoSchema = `{
         { "key": "rep_rut", "type": "id", "idKind": "rut", "label": "RUT", "required": true },
         { "key": "rep_email", "type": "email", "label": "Email", "required": true },
         { "key": "rep_telefono", "type": "phone", "label": "Teléfono", "placeholder": "+56 9 1234 5678" },
+        { "key": "rep_nacionalidad", "type": "country", "label": "Nacionalidad", "required": true },
+        { "key": "rep_pep", "type": "yesno", "label": "¿Es persona expuesta políticamente (PEP)?", "required": true,
+          "help": "Ocupa o ocupó en el último año un cargo público relevante, o es familiar directo de alguien que lo hace." },
+        { "key": "rep_pep_cargo", "type": "text", "label": "Cargo público", "required": true,
+          "showIf": { "field": "rep_pep", "op": "eq", "value": "Sí" } },
+        { "key": "separador_socios", "type": "divider",
+          "showIf": { "field": "tipo", "op": "neq", "value": "Persona natural con giro" } },
+        { "key": "titulo_socios", "type": "heading", "label": "Estructura de propiedad",
+          "help": "Indica quiénes son los dueños de la empresa.",
+          "showIf": { "field": "tipo", "op": "neq", "value": "Persona natural con giro" } },
         { "key": "socios", "type": "repeater", "label": "Socios o beneficiarios finales", "min": 1,
           "help": "Personas con 10% o más de participación.",
           "showIf": { "field": "tipo", "op": "neq", "value": "Persona natural con giro" },
@@ -63,7 +75,10 @@ const demoSchema = `{
           "showIf": { "field": "tipo", "op": "neq", "value": "Persona natural con giro" } },
         { "key": "cedula_rep", "type": "file", "label": "Cédula del representante (ambos lados)", "required": true,
           "accept": ["image/*", "application/pdf"], "maxMb": 5 },
-        { "key": "acepta", "type": "checkbox", "label": "Declaro que la información entregada es verdadera.", "required": true }
+        { "key": "aviso_firma", "type": "info", "label": "Declaración y firma",
+          "help": "Al firmar, el representante legal declara que la información y los documentos entregados son verdaderos y autoriza su verificación." },
+        { "key": "acepta", "type": "checkbox", "label": "Declaro que la información entregada es verdadera.", "required": true },
+        { "key": "firma", "type": "signature", "label": "Firma del representante legal", "required": true }
       ]
     }
   ]

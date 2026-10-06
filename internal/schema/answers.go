@@ -24,7 +24,13 @@ var (
 	phoneRe = regexp.MustCompile(`^\+?[\d\s()-]{6,20}$`)
 	rutRe   = regexp.MustCompile(`^\d{7,8}[0-9K]$`)
 	dniRe   = regexp.MustCompile(`^\d{7,8}$`)
+	urlRe   = regexp.MustCompile(`(?i)^https?://[^\s/$.?#][^\s]*$`)
+	// SVG path data with absolute moves and lines, as drawn by the signature pad.
+	signatureRe = regexp.MustCompile(`^M[\d.]+ [\d.]+(?:[ML][\d.]+ [\d.]+)*$`)
 )
+
+// MaxSignatureLen bounds a signature's path data so one answer can't bloat a submission.
+const MaxSignatureLen = 60000
 
 // Evaluate reports whether a showIf condition holds for the answers.
 func Evaluate(c *Condition, answers map[string]any) bool {
@@ -117,6 +123,9 @@ func validateFields(fields []Field, answers map[string]any, files FileCounts, er
 // AnswerError validates one answer and returns a message, or "" if it is fine.
 // File fields are checked against the uploaded file count for path.
 func AnswerError(f Field, v any, path string, files FileCounts) string {
+	if !f.Type.HasAnswer() {
+		return ""
+	}
 	if f.Type == TypeFile {
 		if f.Required && files[path] == 0 {
 			return "Adjunta un archivo"
@@ -165,7 +174,70 @@ func AnswerError(f Field, v any, path string, files FileCounts) string {
 		if _, err := time.Parse("2006-01-02", s); err != nil {
 			return "Fecha no válida"
 		}
-	case TypeSelect:
+	case TypeTime:
+		if _, err := time.Parse("15:04", s); err != nil {
+			return "Hora no válida"
+		}
+	case TypeDateTime:
+		if _, err := time.Parse("2006-01-02T15:04", s); err != nil {
+			return "Fecha y hora no válidas"
+		}
+	case TypeURL:
+		if !urlRe.MatchString(s) {
+			return "Dirección web no válida (debe empezar con https://)"
+		}
+	case TypeCurrency:
+		n, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+		if err != nil || math.IsNaN(n) || math.IsInf(n, 0) {
+			return "Debe ser un monto"
+		}
+		if f.Min != nil && n < *f.Min {
+			return fmt.Sprintf("El monto mínimo es %s", num(*f.Min))
+		}
+		if f.Max != nil && n > *f.Max {
+			return fmt.Sprintf("El monto máximo es %s", num(*f.Max))
+		}
+		return ""
+	case TypeScale:
+		n, err := strconv.ParseFloat(s, 64)
+		lo, hi := scaleRange(f)
+		if err != nil || n != math.Trunc(n) || n < lo || n > hi {
+			return fmt.Sprintf("Elige un valor entre %s y %s", num(lo), num(hi))
+		}
+		return ""
+	case TypeYesNo:
+		if !slices.Contains(YesNo, s) {
+			return "Opción no válida"
+		}
+		return ""
+	case TypeCountry:
+		if !ValidCountry(s) {
+			return "País no válido"
+		}
+		return ""
+	case TypeAddress:
+		m, ok := v.(map[string]any)
+		if !ok {
+			return "Dirección no válida"
+		}
+		for k, x := range m {
+			if _, isStr := x.(string); !slices.Contains(AddressParts, k) || !isStr {
+				return "Dirección no válida"
+			}
+		}
+		if str(m["line1"]) == "" || str(m["city"]) == "" || str(m["country"]) == "" {
+			return "Completa calle, ciudad y país"
+		}
+		if !ValidCountry(str(m["country"])) {
+			return "País no válido"
+		}
+		return ""
+	case TypeSignature:
+		if len(s) > MaxSignatureLen || !signatureRe.MatchString(s) {
+			return "La firma no es válida, vuelve a firmar"
+		}
+		return ""
+	case TypeSelect, TypeRadio:
 		if !slices.Contains(f.Options, s) {
 			return "Opción no válida"
 		}
@@ -249,7 +321,7 @@ func (s Schema) Clean(answers map[string]any) map[string]any {
 func cleanFields(fields []Field, in, out map[string]any) {
 	for _, f := range fields {
 		v, ok := in[f.Key]
-		if !ok || f.Type == TypeFile {
+		if !ok || f.Type == TypeFile || !f.Type.HasAnswer() {
 			continue
 		}
 		if f.Type == TypeRepeater {
@@ -309,6 +381,14 @@ func isEmpty(v any) bool {
 		return !x
 	case []any:
 		return len(x) == 0
+	case map[string]any:
+		// An address with every part blank counts as unanswered.
+		for _, p := range x {
+			if !isEmpty(p) {
+				return false
+			}
+		}
+		return true
 	}
 	return false
 }
