@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gabrielventodev/formflow/api/internal/mailer"
+	"github.com/gabrielventodev/formflow/api/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -22,6 +23,7 @@ type Server struct {
 	Links        http.Handler  // form links and invitations, mounted at /api/v1/admin/links
 	Mail         mailer.Mailer // notifies applicants of review decisions (nil = no emails)
 	WebURL       string        // public web URL used in applicant links
+	Uploads      storage.Store // stores the organization logo (nil = logo uploads disabled)
 }
 
 func (s *Server) Routes() http.Handler {
@@ -37,6 +39,9 @@ func (s *Server) Routes() http.Handler {
 			r.Mount("/portal", s.Portal)
 		}
 
+		r.Get("/branding", s.publicBranding)
+		r.Get("/branding/logo", s.publicLogo)
+
 		r.Post("/auth/login", s.login)
 		r.Post("/auth/logout", s.logout)
 		r.With(s.requireUser).Get("/auth/me", s.me)
@@ -48,7 +53,7 @@ func (s *Server) Routes() http.Handler {
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(s.requireUser)
 			// Reviewers only review: building forms, sharing links and the
-			// organization-wide activity log are for owners and admins.
+			// organization-wide activity log and branding are for owners and admins.
 			r.Group(func(r chi.Router) {
 				r.Use(requireRole("owner", "admin"))
 				r.Route("/forms", s.formRoutes)
@@ -56,6 +61,10 @@ func (s *Server) Routes() http.Handler {
 					r.Mount("/links", s.Links)
 				}
 				r.Get("/activity", s.listActivity)
+				r.Get("/organization", s.getOrganization)
+				r.Put("/organization", s.updateOrganization)
+				r.Post("/organization/logo", s.uploadLogo)
+				r.Delete("/organization/logo", s.deleteLogo)
 			})
 			r.Route("/team", s.teamRoutes)
 			s.adminRoutes(r)

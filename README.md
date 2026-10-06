@@ -98,6 +98,12 @@ Cada formulario puede tener hasta 5 pasos de aprobación en orden (por ejemplo C
 - Pedir correcciones o reabrir una decisión reinicia el flujo; las firmas anteriores quedan en el historial como anuladas.
 - Sin pasos configurados, aprobar funciona como siempre (un clic).
 
+## Marca de la organización
+
+`GET/PUT /api/v1/admin/organization` (owners y admins) cambia el nombre, el color principal y el email de contacto; `POST/DELETE /api/v1/admin/organization/logo` sube o quita el logo (PNG, JPG o WebP, hasta 1 MB; SVG no se acepta porque puede llevar scripts). El color debe tener contraste AA (4,5:1) con texto blanco, porque es el fondo de los botones.
+
+El portal lo lee sin sesión desde `GET /api/v1/branding` y `GET /api/v1/branding/logo`. Todos los correos salen además en HTML con el color, el logo y el email de contacto (`mailer.Branded`); la versión de texto plano se mantiene.
+
 ## Docker
 
 ```sh
@@ -115,5 +121,6 @@ docker run -p 8080:8080 -e DATABASE_URL=postgres://... formsis-backend
 - `internal/forms` y `internal/schema`: constructor de formularios y validación del esquema
 - `internal/portal`: portal de llenado (enlaces, borradores, archivos, envío)
 - `internal/storage`: almacenamiento local o S3
-- `internal/mailer`: envío de correos
+- `internal/mailer`: envío de correos (texto + HTML con la marca)
+- `internal/branding`: nombre, color y logo de la organización
 - `migrations`: SQL de la base de datos
