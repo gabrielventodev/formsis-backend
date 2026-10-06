@@ -277,13 +277,13 @@ func (s *Server) updateWebhook(w http.ResponseWriter, r *http.Request) {
 		if tag.RowsAffected() == 0 {
 			return pgx.ErrNoRows
 		}
-		if len(meta) > 1 {
-			if err := insertOrgAudit(r.Context(), tx, id.OrgID, id.UserID, "webhook.updated", meta); err != nil {
-				return err
-			}
+		if out, err = s.loadWebhook(r.Context(), tx, id.OrgID, hookID); err != nil || len(meta) == 1 {
+			return err
 		}
-		out, err = s.loadWebhook(r.Context(), tx, id.OrgID, hookID)
-		return err
+		if _, ok := meta["url"]; !ok {
+			meta["url"] = out.URL
+		}
+		return insertOrgAudit(r.Context(), tx, id.OrgID, id.UserID, "webhook.updated", meta)
 	})
 	s.respondWebhook(w, r, out, err)
 }
@@ -322,11 +322,10 @@ func (s *Server) rotateWebhookSecret(w http.ResponseWriter, r *http.Request) {
 		if tag.RowsAffected() == 0 {
 			return pgx.ErrNoRows
 		}
-		if err := insertOrgAudit(r.Context(), tx, id.OrgID, id.UserID, "webhook.secret_rotated", map[string]any{"webhook_id": hookID}); err != nil {
+		if out, err = s.loadWebhook(r.Context(), tx, id.OrgID, hookID); err != nil {
 			return err
 		}
-		out, err = s.loadWebhook(r.Context(), tx, id.OrgID, hookID)
-		return err
+		return insertOrgAudit(r.Context(), tx, id.OrgID, id.UserID, "webhook.secret_rotated", map[string]any{"webhook_id": hookID, "url": out.URL})
 	})
 	out.Secret = secret
 	s.respondWebhook(w, r, out, err)
