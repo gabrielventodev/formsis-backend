@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"regexp"
 	"strings"
 )
@@ -25,12 +26,43 @@ const (
 	TypeFile        FieldType = "file"
 	TypeID          FieldType = "id"
 	TypeRepeater    FieldType = "repeater"
+	TypeURL         FieldType = "url"
+	TypeCurrency    FieldType = "currency"  // amount in Field.Currency
+	TypeTime        FieldType = "time"      // "15:04"
+	TypeDateTime    FieldType = "datetime"  // "2006-01-02T15:04"
+	TypeYesNo       FieldType = "yesno"     // "Sí" or "No"
+	TypeRadio       FieldType = "radio"     // one of Options, shown as buttons
+	TypeCountry     FieldType = "country"   // ISO 3166-1 alpha-2 code
+	TypeAddress     FieldType = "address"   // object, see AddressParts
+	TypeScale       FieldType = "scale"     // integer between Min (default 1) and Max (default 5)
+	TypeSignature   FieldType = "signature" // SVG path data drawn by the applicant
+	TypeInfo        FieldType = "info"      // heading and text, no answer
 )
 
 var knownTypes = map[FieldType]bool{
 	TypeText: true, TypeTextarea: true, TypeEmail: true, TypePhone: true, TypeNumber: true,
 	TypeDate: true, TypeSelect: true, TypeMultiselect: true, TypeCheckbox: true, TypeFile: true,
-	TypeID: true, TypeRepeater: true,
+	TypeID: true, TypeRepeater: true, TypeURL: true, TypeCurrency: true, TypeTime: true,
+	TypeDateTime: true, TypeYesNo: true, TypeRadio: true, TypeCountry: true, TypeAddress: true,
+	TypeScale: true, TypeSignature: true, TypeInfo: true,
+}
+
+// YesNo are the only answers a yesno field accepts.
+var YesNo = []string{"Sí", "No"}
+
+// AddressParts are the keys of an address answer, in display order.
+var AddressParts = []string{"line1", "line2", "city", "region", "postalCode", "country"}
+
+// HasAnswer reports whether the type collects a value from the applicant.
+func (t FieldType) HasAnswer() bool { return t != TypeInfo }
+
+// Conditionable reports whether other fields may depend on a field of this type.
+func (t FieldType) Conditionable() bool {
+	switch t {
+	case TypeRepeater, TypeFile, TypeAddress, TypeSignature, TypeInfo:
+		return false
+	}
+	return true
 }
 
 // ID document kinds with built-in check-digit or format validation.
@@ -66,7 +98,8 @@ type Field struct {
 	Accept         []string   `json:"accept,omitempty"`
 	MaxMb          *float64   `json:"maxMb,omitempty"`
 	IDKind         string     `json:"idKind,omitempty"`
-	Fields         []Field    `json:"fields,omitempty"` // repeater sub-fields
+	Currency       string     `json:"currency,omitempty"` // ISO 4217 code for currency fields
+	Fields         []Field    `json:"fields,omitempty"`   // repeater sub-fields
 	ShowIf         *Condition `json:"showIf,omitempty"`
 }
 
@@ -167,7 +200,7 @@ func (v *validator) field(p string, f Field, nested bool) {
 		}
 	}
 	switch f.Type {
-	case TypeSelect, TypeMultiselect:
+	case TypeSelect, TypeMultiselect, TypeRadio:
 		if len(f.Options) == 0 {
 			v.add(p+".options", "Agrega al menos una opción")
 		}
@@ -187,6 +220,19 @@ func (v *validator) field(p string, f Field, nested bool) {
 	case TypeID:
 		if !knownIDKinds[f.IDKind] {
 			v.add(p+".idKind", "Elige el tipo de documento (RUT, DNI u otro)")
+		}
+	case TypeCurrency:
+		if !knownCurrencies[f.Currency] {
+			v.add(p+".currency", "Elige la moneda")
+		}
+	case TypeScale:
+		lo, hi := scaleRange(f)
+		if lo != math.Trunc(lo) || hi != math.Trunc(hi) || lo < 0 || hi > 10 || lo >= hi {
+			v.add(p+".min", "La escala va de un entero a otro mayor, entre 0 y 10")
+		}
+	case TypeInfo:
+		if nested {
+			v.add(p+".type", "Un grupo repetible no puede contener bloques de texto")
 		}
 	case TypeRepeater:
 		if nested {
@@ -235,10 +281,22 @@ func (v *validator) condition(p string, c Condition, self string) {
 		v.add(p+".field", "La condición debe referirse a un campo anterior del formulario")
 		return
 	}
-	if t == TypeRepeater || t == TypeFile {
-		v.add(p+".field", "No se puede usar un grupo repetible o un archivo en una condición")
+	if !t.Conditionable() {
+		v.add(p+".field", "Ese tipo de campo no se puede usar en una condición")
 	}
 	if (c.Op == "eq" || c.Op == "neq" || c.Op == "contains") && c.Value == nil {
 		v.add(p+".value", "Indica el valor a comparar")
 	}
+}
+
+// scaleRange returns a scale field's bounds with their defaults applied.
+func scaleRange(f Field) (lo, hi float64) {
+	lo, hi = 1, 5
+	if f.Min != nil {
+		lo = *f.Min
+	}
+	if f.Max != nil {
+		hi = *f.Max
+	}
+	return lo, hi
 }

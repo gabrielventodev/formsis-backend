@@ -71,6 +71,14 @@ func TestValidateProblems(t *testing.T) {
 			{"key":"y","type":"text","label":"Y","showIf":{"field":"x","op":"eq"}}]}]}`, "sections[0].fields[1].showIf.value", "valor"},
 		{"nested repeater", `{"sections":[{"key":"a","title":"A","fields":[{"key":"r","type":"repeater","label":"R","fields":[
 			{"key":"q","type":"repeater","label":"Q","fields":[{"key":"z","type":"text","label":"Z"}]}]}]}]}`, "sections[0].fields[0].fields[0].type", "otro grupo"},
+		{"currency without code", `{"sections":[{"key":"a","title":"A","fields":[{"key":"x","type":"currency","label":"X"}]}]}`, "sections[0].fields[0].currency", "moneda"},
+		{"radio without options", `{"sections":[{"key":"a","title":"A","fields":[{"key":"x","type":"radio","label":"X"}]}]}`, "sections[0].fields[0].options", "al menos una opción"},
+		{"scale too wide", `{"sections":[{"key":"a","title":"A","fields":[{"key":"x","type":"scale","label":"X","max":20}]}]}`, "sections[0].fields[0].min", "escala"},
+		{"info in repeater", `{"sections":[{"key":"a","title":"A","fields":[{"key":"r","type":"repeater","label":"R","fields":[
+			{"key":"i","type":"info","label":"I"}]}]}]}`, "sections[0].fields[0].fields[0].type", "bloques de texto"},
+		{"condition on address", `{"sections":[{"key":"a","title":"A","fields":[
+			{"key":"x","type":"address","label":"X"},
+			{"key":"y","type":"text","label":"Y","showIf":{"field":"x","op":"notEmpty"}}]}]}`, "sections[0].fields[1].showIf.field", "condición"},
 		{"id without kind", `{"sections":[{"key":"a","title":"A","fields":[{"key":"x","type":"id","label":"X"}]}]}`, "sections[0].fields[0].idKind", "documento"},
 	}
 	for _, c := range cases {

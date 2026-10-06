@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gabrielventodev/formflow/api/internal/auth"
+	"github.com/gabrielventodev/formflow/api/internal/schema"
 	"github.com/gabrielventodev/formflow/api/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -115,7 +116,11 @@ func (s *Server) exportSubmissions(w http.ResponseWriter, r *http.Request) {
 		var sc formSchema
 		if json.Unmarshal(raw, &sc) == nil {
 			for _, sec := range sc.Sections {
-				fields = append(fields, sec.Fields...)
+				for _, f := range sec.Fields {
+					if schema.FieldType(f.Type).HasAnswer() {
+						fields = append(fields, f)
+					}
+				}
 			}
 		}
 	}
@@ -164,7 +169,7 @@ func (s *Server) exportSubmissions(w http.ResponseWriter, r *http.Request) {
 			var m map[string]any
 			_ = json.Unmarshal(data, &m)
 			for _, f := range fields {
-				rec = append(rec, csvValue(lookupAnswer(m, f.Key)))
+				rec = append(rec, csvField(f, lookupAnswer(m, f.Key)))
 			}
 		} else {
 			rec = append(rec, string(data))
@@ -205,6 +210,27 @@ func lookupAnswer(data map[string]any, key string) any {
 		}
 	}
 	return nil
+}
+
+// csvField renders answers whose raw JSON reads badly in a spreadsheet.
+func csvField(f schemaField, v any) string {
+	switch schema.FieldType(f.Type) {
+	case schema.TypeSignature:
+		if s, _ := v.(string); s != "" {
+			return "Firmado"
+		}
+		return ""
+	case schema.TypeAddress:
+		m, _ := v.(map[string]any)
+		parts := []string{}
+		for _, k := range schema.AddressParts {
+			if s, _ := m[k].(string); strings.TrimSpace(s) != "" {
+				parts = append(parts, strings.TrimSpace(s))
+			}
+		}
+		return strings.Join(parts, ", ")
+	}
+	return csvValue(v)
 }
 
 func csvValue(v any) string {

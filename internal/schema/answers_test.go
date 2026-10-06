@@ -80,6 +80,70 @@ func TestValidateAnswers(t *testing.T) {
 	}
 }
 
+const kycExtra = `{
+  "sections": [{
+    "key": "datos", "title": "Datos",
+    "fields": [
+      { "key": "aviso", "type": "info", "label": "Antes de empezar", "help": "Ten a mano tu cédula" },
+      { "key": "web", "type": "url", "label": "Sitio web" },
+      { "key": "ingresos", "type": "currency", "currency": "CLP", "label": "Ingresos", "min": 0, "required": true },
+      { "key": "hora", "type": "time", "label": "Hora de contacto" },
+      { "key": "constitucion", "type": "datetime", "label": "Constitución" },
+      { "key": "pep", "type": "yesno", "label": "¿Es PEP?", "required": true },
+      { "key": "rubro", "type": "radio", "label": "Rubro", "options": ["Comercio", "Servicios"] },
+      { "key": "pais", "type": "country", "label": "País", "required": true },
+      { "key": "domicilio", "type": "address", "label": "Domicilio", "required": true },
+      { "key": "satisfaccion", "type": "scale", "label": "Satisfacción", "min": 0, "max": 10 },
+      { "key": "firma", "type": "signature", "label": "Firma", "required": true }
+    ]
+  }]
+}`
+
+func TestNewFieldTypes(t *testing.T) {
+	s, err := Parse([]byte(kycExtra))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := Validate(s); len(p) > 0 {
+		t.Fatalf("schema is not publishable: %v", p)
+	}
+	const ok = `"aviso":"x","web":"https://acme.cl/x","ingresos":"1500000.5","hora":"09:30","constitucion":"2020-01-31T18:00",
+		"pep":"No","rubro":"Comercio","pais":"CL","satisfaccion":10,"firma":"M10 20L30.5 40L31 41",
+		"domicilio":{"line1":"Av. Siempre Viva 742","line2":"","city":"Santiago","region":"RM","country":"CL"}`
+	cases := []struct {
+		name string
+		data string
+		want []string
+	}{
+		{"empty", `{"domicilio":{"line1":"","city":""}}`, []string{"ingresos", "pep", "pais", "domicilio", "firma"}},
+		{"ok", `{` + ok + `}`, nil},
+		{"bad values", `{` + ok + `,"web":"acme.cl","ingresos":"mucho","hora":"25:00","constitucion":"2020-01-31",
+			"pep":"Tal vez","rubro":"Minería","pais":"XX","satisfaccion":11,"firma":"<script>"}`,
+			[]string{"web", "ingresos", "hora", "constitucion", "pep", "rubro", "pais", "satisfaccion", "firma"}},
+		{"negative amount", `{` + ok + `,"ingresos":-1}`, []string{"ingresos"}},
+		{"fractional scale", `{` + ok + `,"satisfaccion":2.5}`, []string{"satisfaccion"}},
+		{"incomplete address", `{` + ok + `,"domicilio":{"line1":"Calle 1","country":"CL"}}`, []string{"domicilio"}},
+		{"address extra key", `{` + ok + `,"domicilio":{"line1":"a","city":"b","country":"CL","x":"y"}}`, []string{"domicilio"}},
+		{"address bad country", `{` + ok + `,"domicilio":{"line1":"a","city":"b","country":"ZZ"}}`, []string{"domicilio"}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			errs := s.ValidateAnswers(answers(t, c.data), nil)
+			if len(errs) != len(c.want) {
+				t.Fatalf("got %v, want keys %v", errs, c.want)
+			}
+			for _, k := range c.want {
+				if _, ok := errs[k]; !ok {
+					t.Errorf("missing error for %s in %v", k, errs)
+				}
+			}
+		})
+	}
+	if out := s.Clean(answers(t, `{`+ok+`}`)); out["aviso"] != nil || out["domicilio"] == nil {
+		t.Errorf("Clean kept info or dropped address: %v", out)
+	}
+}
+
 func TestEvaluate(t *testing.T) {
 	a := map[string]any{"tipo": "SpA", "productos": []any{"Crédito"}, "acepta": true, "monto": float64(10)}
 	cases := []struct {
