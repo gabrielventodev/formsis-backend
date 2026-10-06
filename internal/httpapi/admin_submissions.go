@@ -243,7 +243,7 @@ func (s *Server) submissionFacets(w http.ResponseWriter, r *http.Request) {
 	reviewers := []reviewer{}
 	rows, err = s.DB.Query(ctx, `
 		SELECT u.id, u.name, u.email, m.role FROM memberships m JOIN users u ON u.id = m.user_id
-		WHERE m.organization_id = $1 ORDER BY u.name, u.email`, id.OrgID)
+		WHERE m.organization_id = $1 AND m.disabled_at IS NULL ORDER BY u.name, u.email`, id.OrgID)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -543,7 +543,7 @@ func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	email, err := s.decisionEmail(ctx, tx, subID, in.To, in.Comment, fieldComments)
+	email, err := s.decisionEmail(ctx, tx, subID, from, in.To, in.Comment, fieldComments)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -673,7 +673,7 @@ func (s *Server) assignSubmission(w http.ResponseWriter, r *http.Request) {
 	if in.UserID != nil {
 		var ok bool
 		if err := tx.QueryRow(ctx,
-			`SELECT EXISTS (SELECT 1 FROM memberships WHERE user_id::text = $1 AND organization_id = $2)`,
+			`SELECT EXISTS (SELECT 1 FROM memberships WHERE user_id::text = $1 AND organization_id = $2 AND disabled_at IS NULL)`,
 			*in.UserID, id.OrgID).Scan(&ok); err != nil {
 			s.serverError(w, r, err)
 			return

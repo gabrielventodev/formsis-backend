@@ -40,13 +40,24 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/auth/login", s.login)
 		r.Post("/auth/logout", s.logout)
 		r.With(s.requireUser).Get("/auth/me", s.me)
+		r.With(s.requireUser).Put("/auth/me/password", s.changePassword)
+		r.Post("/auth/password/forgot", s.forgotPassword)
+		r.Get("/auth/password/token", s.checkPasswordToken)
+		r.Post("/auth/password/reset", s.resetPassword)
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(s.requireUser)
-			r.Route("/forms", s.formRoutes)
-			if s.Links != nil {
-				r.Mount("/links", s.Links)
-			}
+			// Reviewers only review: building forms, sharing links and the
+			// organization-wide activity log are for owners and admins.
+			r.Group(func(r chi.Router) {
+				r.Use(requireRole("owner", "admin"))
+				r.Route("/forms", s.formRoutes)
+				if s.Links != nil {
+					r.Mount("/links", s.Links)
+				}
+				r.Get("/activity", s.listActivity)
+			})
+			r.Route("/team", s.teamRoutes)
 			s.adminRoutes(r)
 		})
 	})
@@ -78,7 +89,7 @@ func (s *Server) cors(next http.Handler) http.Handler {
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type, Authorization", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(v)
 }

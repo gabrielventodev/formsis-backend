@@ -15,12 +15,23 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// decisionEmail builds the email the applicant gets when a reviewer requests
-// changes, approves or rejects. For changes it rotates the applicant's access
+// decisionEmail builds the email the applicant gets when a reviewer starts
+// reviewing a fresh submission, requests changes, approves or rejects. For changes it rotates the applicant's access
 // token (only its hash is stored) so the email can carry a fresh magic link;
 // call it inside the transition's transaction.
-func (s *Server) decisionEmail(ctx context.Context, tx pgx.Tx, subID, to, comment string, fields []fieldComment) (*mailer.Message, error) {
-	if s.Mail == nil || (to != "changes_requested" && to != "approved" && to != "rejected") {
+func (s *Server) decisionEmail(ctx context.Context, tx pgx.Tx, subID, from, to, comment string, fields []fieldComment) (*mailer.Message, error) {
+	if s.Mail == nil {
+		return nil, nil
+	}
+	switch to {
+	case "changes_requested", "approved", "rejected":
+	case "in_review":
+		// Only the first pickup is news to the applicant; withdrawing a
+		// changes request or reopening a decision is internal.
+		if from != "submitted" {
+			return nil, nil
+		}
+	default:
 		return nil, nil
 	}
 	var email, name, title string
@@ -38,6 +49,9 @@ func (s *Server) decisionEmail(ctx context.Context, tx pgx.Tx, subID, to, commen
 	var b strings.Builder
 	m := &mailer.Message{To: email}
 	switch to {
+	case "in_review":
+		m.Subject = "Estamos revisando tu solicitud: " + title
+		fmt.Fprintf(&b, "%s,\n\nYa comenzamos a revisar tu solicitud \"%s\". Te escribiremos cuando tengamos una respuesta o si necesitamos algún dato adicional.\n", hello, title)
 	case "changes_requested":
 		raw := make([]byte, 32)
 		if _, err := rand.Read(raw); err != nil {

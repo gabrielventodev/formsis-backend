@@ -109,7 +109,10 @@ type Store struct {
 func (s *Store) Login(ctx context.Context, email, password string) (string, Identity, error) {
 	var userID, hash string
 	err := s.DB.QueryRow(ctx,
-		`SELECT id, password_hash FROM users WHERE lower(email) = lower($1)`, strings.TrimSpace(email),
+		`SELECT u.id, u.password_hash FROM users u
+		 WHERE lower(u.email) = lower($1)
+		   AND EXISTS (SELECT 1 FROM memberships m WHERE m.user_id = u.id AND m.disabled_at IS NULL)`,
+		strings.TrimSpace(email),
 	).Scan(&userID, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		VerifyPassword(password, dummyHash)
@@ -133,6 +136,9 @@ func (s *Store) Login(ctx context.Context, email, password string) (string, Iden
 	); err != nil {
 		return "", Identity{}, err
 	}
+	if _, err := s.DB.Exec(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1`, userID); err != nil {
+		return "", Identity{}, err
+	}
 	id, err := s.Lookup(ctx, token)
 	if err != nil {
 		return "", Identity{}, err
@@ -141,7 +147,7 @@ func (s *Store) Login(ctx context.Context, email, password string) (string, Iden
 }
 
 // Lookup resolves a cookie token to an identity. It returns pgx.ErrNoRows when
-// the session is missing, expired, or the user has no membership.
+// the session is missing, expired, or the user has no active membership.
 func (s *Store) Lookup(ctx context.Context, token string) (Identity, error) {
 	var id Identity
 	err := s.DB.QueryRow(ctx, `
@@ -149,7 +155,7 @@ func (s *Store) Lookup(ctx context.Context, token string) (Identity, error) {
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
 		JOIN memberships m ON m.user_id = u.id
-		WHERE s.id = $1 AND s.expires_at > now()
+		WHERE s.id = $1 AND s.expires_at > now() AND m.disabled_at IS NULL
 		ORDER BY m.organization_id
 		LIMIT 1`, hashToken(token),
 	).Scan(&id.UserID, &id.Email, &id.Name, &id.OrgID, &id.Role)

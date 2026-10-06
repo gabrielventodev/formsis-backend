@@ -73,7 +73,20 @@ Este repositorio es el backend publicado aparte para llevarle seguimiento. Su hi
 
 ## Migraciones
 
-Están en `migrations/` como archivos SQL de goose y se aplican al arrancar la API. Para crear una nueva, agrega el siguiente archivo numerado (por ejemplo `00005_algo.sql`) con sus secciones `-- +goose Up` y `-- +goose Down`.
+Están en `migrations/` como archivos SQL de goose y se aplican al arrancar la API. Para crear una nueva, agrega el siguiente archivo numerado (por ejemplo `00006_algo.sql`) con sus secciones `-- +goose Up` y `-- +goose Down`.
+
+## Equipo y roles
+
+| Rol | Puede |
+|---|---|
+| `owner` | Todo, incluido dar o quitar el rol owner |
+| `admin` | Crear formularios y enlaces, revisar, invitar y desactivar miembros (no owners), ver la actividad |
+| `reviewer` | Solo revisar envíos |
+
+- Los miembros se invitan desde `POST /api/v1/admin/team`; reciben un email con un enlace (válido 7 días) para crear su contraseña en `/admin/contrasena`. Si no hay SMTP configurado, el enlace aparece en el log de la API y también lo devuelve la respuesta (`invite_url`).
+- "Olvidé mi contraseña" envía un enlace válido por 1 hora (`POST /api/v1/auth/password/forgot`).
+- Desactivar a un miembro cierra sus sesiones y devuelve a la bandeja los envíos abiertos que tenía asignados.
+- `GET /api/v1/admin/activity` es el historial de auditoría de toda la organización (envíos y cambios de equipo).
 
 ## Docker
 
@@ -88,7 +101,7 @@ docker run -p 8080:8080 -e DATABASE_URL=postgres://... formsis-backend
 - `internal/config`: lectura de variables de entorno
 - `internal/db`: conexión y migraciones
 - `internal/httpapi`: rutas HTTP y middleware
-- `internal/auth`: sesiones de administrador
+- `internal/auth`: sesiones de administrador, invitaciones y cambio de contraseña
 - `internal/forms` y `internal/schema`: constructor de formularios y validación del esquema
 - `internal/portal`: portal de llenado (enlaces, borradores, archivos, envío)
 - `internal/storage`: almacenamiento local o S3
