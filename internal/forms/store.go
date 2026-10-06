@@ -220,8 +220,8 @@ func (s *Store) Publish(ctx context.Context, orgID, id string) (Form, error) {
 func (s *Store) Duplicate(ctx context.Context, orgID, id string) (Form, error) {
 	var newID string
 	err := s.DB.QueryRow(ctx, `
-		INSERT INTO forms (organization_id, title, description, draft_schema)
-		SELECT organization_id, title || ' (copia)', description, draft_schema
+		INSERT INTO forms (organization_id, title, description, draft_schema, approval_steps)
+		SELECT organization_id, title || ' (copia)', description, draft_schema, approval_steps
 		FROM forms WHERE organization_id = $1 AND id = $2
 		RETURNING id`, orgID, id).Scan(&newID)
 	if errors.Is(err, pgx.ErrNoRows) {

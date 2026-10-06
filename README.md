@@ -73,7 +73,7 @@ Este repositorio es el backend publicado aparte para llevarle seguimiento. Su hi
 
 ## Migraciones
 
-Están en `migrations/` como archivos SQL de goose y se aplican al arrancar la API. Para crear una nueva, agrega el siguiente archivo numerado (por ejemplo `00006_algo.sql`) con sus secciones `-- +goose Up` y `-- +goose Down`.
+Están en `migrations/` como archivos SQL de goose y se aplican al arrancar la API. Para crear una nueva, agrega el siguiente archivo numerado (por ejemplo `00007_algo.sql`) con sus secciones `-- +goose Up` y `-- +goose Down`.
 
 ## Equipo y roles
 
@@ -87,6 +87,16 @@ Están en `migrations/` como archivos SQL de goose y se aplican al arrancar la A
 - "Olvidé mi contraseña" envía un enlace válido por 1 hora (`POST /api/v1/auth/password/forgot`).
 - Desactivar a un miembro cierra sus sesiones y devuelve a la bandeja los envíos abiertos que tenía asignados.
 - `GET /api/v1/admin/activity` es el historial de auditoría de toda la organización (envíos y cambios de equipo).
+
+## Aprobaciones en varios niveles
+
+Cada formulario puede tener hasta 5 pasos de aprobación en orden (por ejemplo Comercial → Cumplimiento), configurados con `GET/PUT /api/v1/admin/forms/{id}/approval-flow`. Cada paso tiene nombre y, opcionalmente, una lista de aprobadores (vacía = cualquier miembro).
+
+- "Aprobar" un envío firma el paso pendiente; el envío sigue en revisión hasta que firma el último paso. Si el paso siguiente tiene un solo aprobador, el envío se le asigna.
+- Un paso con aprobadores solo lo firman ellos o un owner.
+- Con dos o más pasos, una misma persona firma como máximo un paso (principio de cuatro ojos), owners incluidos.
+- Pedir correcciones o reabrir una decisión reinicia el flujo; las firmas anteriores quedan en el historial como anuladas.
+- Sin pasos configurados, aprobar funciona como siempre (un clic).
 
 ## Docker
 

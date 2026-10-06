@@ -47,11 +47,21 @@ type submissionRow struct {
 	DecidedAt      *time.Time `json:"decided_at"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
+	// Pending step of the form's approval flow while the submission is open (nil when the form has none).
+	ApprovalStep *approvalProgress `json:"approval_step"`
+}
+
+type approvalProgress struct {
+	Index int    `json:"index"`
+	Total int    `json:"total"`
+	Name  string `json:"name"`
 }
 
 const submissionSelect = `
 	SELECT s.id, s.form_id, f.title, v.version_number, s.applicant_email, s.applicant_name, s.status,
-	       u.id, u.name, u.email, s.submitted_at, s.decided_at, s.created_at, s.updated_at
+	       u.id, u.name, u.email, s.submitted_at, s.decided_at, s.created_at, s.updated_at,
+	       s.approval_step, jsonb_array_length(f.approval_steps),
+	       f.approval_steps -> LEAST(s.approval_step, jsonb_array_length(f.approval_steps) - 1) ->> 'name'
 	FROM submissions s
 	JOIN forms f ON f.id = s.form_id
 	JOIN form_versions v ON v.id = s.form_version_id
@@ -59,11 +69,17 @@ const submissionSelect = `
 
 func scanSubmission(row pgx.Row) (submissionRow, error) {
 	var sr submissionRow
-	var uid, uname, uemail *string
+	var uid, uname, uemail, stepName *string
+	var step, total int
 	err := row.Scan(&sr.ID, &sr.FormID, &sr.FormTitle, &sr.VersionNumber, &sr.ApplicantEmail, &sr.ApplicantName,
-		&sr.Status, &uid, &uname, &uemail, &sr.SubmittedAt, &sr.DecidedAt, &sr.CreatedAt, &sr.UpdatedAt)
+		&sr.Status, &uid, &uname, &uemail, &sr.SubmittedAt, &sr.DecidedAt, &sr.CreatedAt, &sr.UpdatedAt,
+		&step, &total, &stepName)
 	if uid != nil {
 		sr.AssignedTo = &userRef{ID: *uid, Name: *uname, Email: *uemail}
+	}
+	open := sr.Status == "submitted" || sr.Status == "in_review"
+	if total > 0 && stepName != nil && open {
+		sr.ApprovalStep = &approvalProgress{Index: min(step, total-1), Total: total, Name: *stepName}
 	}
 	return sr, err
 }
@@ -361,7 +377,14 @@ func (s *Server) getSubmission(w http.ResponseWriter, r *http.Request) {
 	}
 	rows.Close()
 
+	approval, err := s.loadApprovalState(ctx, sr, id)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
+		"approval":            approval,
 		"submission":          sr,
 		"data":                data,
 		"schema":              schema,
@@ -474,10 +497,11 @@ func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 
 	var subID, from string
 	var assigned *string
+	var approvalStep int
 	err = tx.QueryRow(ctx, `
-		SELECT id, status::text, assigned_to::text FROM submissions
+		SELECT id, status::text, assigned_to::text, approval_step FROM submissions
 		WHERE id::text = $1 AND organization_id = $2 FOR UPDATE`, chi.URLParam(r, "id"), id.OrgID,
-	).Scan(&subID, &from, &assigned)
+	).Scan(&subID, &from, &assigned, &approvalStep)
 	if errors.Is(err, pgx.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "Envío no encontrado", nil)
 		return
@@ -499,17 +523,69 @@ func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Taking a submission into review assigns it to the reviewer if nobody has it.
-	assignSelf := in.To == "in_review" && assigned == nil
+	// With an approval flow, "approve" signs off the pending step; only the
+	// last step's sign-off approves the submission.
+	to := in.To
+	var step *stepDecision
+	if in.To == "approved" {
+		var reason string
+		step, reason, err = checkStep(ctx, tx, subID, approvalStep, id)
+		if errors.Is(err, errStepForbidden) {
+			writeError(w, http.StatusForbidden, reason, nil)
+			return
+		}
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		if step != nil && !step.final {
+			to = "in_review"
+		}
+	}
+
+	// Taking a submission into review assigns it to the reviewer if nobody has
+	// it; an intermediate sign-off hands it to the next step's sole approver.
+	setAssignee := to == "in_review" && assigned == nil && step == nil
+	var assignTo *string
+	if setAssignee {
+		assignTo = &id.UserID
+	}
+	nextStep := approvalStep
+	switch {
+	case step != nil && !step.final:
+		nextStep = step.index + 1
+		setAssignee = true
+		if len(step.next.Approvers) == 1 {
+			assignTo = &step.next.Approvers[0]
+		}
+	case in.To == "changes_requested" || (in.To == "in_review" && (from == "approved" || from == "rejected")):
+		// The data may change, or the decision is being reconsidered: start the flow over.
+		nextStep = 0
+		if _, err := tx.Exec(ctx, `
+			UPDATE submission_approvals SET invalidated_at = now()
+			WHERE submission_id = $1 AND invalidated_at IS NULL`, subID); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE submissions SET
 			status = $2::submission_status,
 			decided_at = CASE WHEN $2 IN ('approved', 'rejected') THEN now() ELSE NULL END,
 			assigned_to = CASE WHEN $3 THEN $4::uuid ELSE assigned_to END,
+			approval_step = $5,
 			updated_at = now()
-		WHERE id = $1`, subID, in.To, assignSelf, id.UserID); err != nil {
+		WHERE id = $1`, subID, to, setAssignee, assignTo, nextStep); err != nil {
 		s.serverError(w, r, err)
 		return
+	}
+	if step != nil {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO submission_approvals (submission_id, step, step_name, user_id, comment)
+			VALUES ($1, $2, $3, $4, $5)`, subID, step.index, step.name, id.UserID, in.Comment); err != nil {
+			s.serverError(w, r, err)
+			return
+		}
 	}
 
 	if in.Comment != "" {
@@ -536,14 +612,22 @@ func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 	if len(fieldComments) > 0 {
 		meta["field_comments"] = fieldComments
 	}
-	if assignSelf {
-		meta["assigned_to"] = id.UserID
+	if setAssignee {
+		meta["assigned_to"] = assignTo
 	}
-	if err := insertAudit(ctx, tx, subID, id.UserID, transitionAction(from, in.To), &from, &in.To, meta); err != nil {
+	action := transitionAction(from, to)
+	if step != nil {
+		meta["step"], meta["step_name"] = step.index+1, step.name
+		if !step.final {
+			action = "step_approved"
+			meta["next_step_name"] = step.next.Name
+		}
+	}
+	if err := insertAudit(ctx, tx, subID, id.UserID, action, &from, &to, meta); err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	email, err := s.decisionEmail(ctx, tx, subID, from, in.To, in.Comment, fieldComments)
+	email, err := s.decisionEmail(ctx, tx, subID, from, to, in.Comment, fieldComments)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -553,7 +637,7 @@ func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.sendAsync(email)
-	writeJSON(w, http.StatusOK, map[string]string{"status": in.To})
+	writeJSON(w, http.StatusOK, map[string]any{"status": to, "approval_step": nextStep})
 }
 
 func (s *Server) addComment(w http.ResponseWriter, r *http.Request) {
