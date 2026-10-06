@@ -88,6 +88,15 @@ Están en `migrations/` como archivos SQL de goose y se aplican al arrancar la A
 - Desactivar a un miembro cierra sus sesiones y devuelve a la bandeja los envíos abiertos que tenía asignados.
 - `GET /api/v1/admin/activity` es el historial de auditoría de toda la organización (envíos y cambios de equipo).
 
+## Plantillas KYB / KYC
+
+`GET /api/v1/admin/forms/templates` lista formularios listos para usar y `POST /api/v1/admin/forms/templates/{key}` crea un borrador a partir de uno (el body puede traer `{"title": "..."}`). El borrador es un formulario normal: se edita en el constructor y se publica.
+
+- `kyb-empresa`: datos de la empresa (RUT si es chilena, ID tributario si no), representante legal con poder, beneficiarios finales (≥25 %), perfil y origen de fondos, PEP, documentos y firma.
+- `kyc-persona`: identidad con documento y selfie, contacto y comprobante de domicilio, actividad e ingresos, PEP, residencia fiscal extranjera y firma.
+
+Las plantillas viven en `internal/forms/templates/*.json` y un test comprueba que todas se pueden publicar tal cual.
+
 ## Aprobaciones en varios niveles
 
 Cada formulario puede tener hasta 5 pasos de aprobación en orden (por ejemplo Comercial → Cumplimiento), configurados con `GET/PUT /api/v1/admin/forms/{id}/approval-flow`. Cada paso tiene nombre y, opcionalmente, una lista de aprobadores (vacía = cualquier miembro).

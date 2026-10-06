@@ -1,0 +1,89 @@
+{
+  "key": "kyb-empresa",
+  "title": "Onboarding empresa (KYB)",
+  "description": "Datos de la empresa, representante legal, beneficiarios finales, perfil de la cuenta y documentos societarios.",
+  "summary": "Para clientes empresa: datos societarios, representante, beneficiarios finales (UBO), perfil transaccional, PEP y documentos.",
+  "schema": {
+    "sections": [
+      {
+        "key": "empresa",
+        "title": "Datos de la empresa",
+        "description": "Tal como aparecen en la escritura de constitución.",
+        "fields": [
+          { "key": "razon_social", "type": "text", "label": "Razón social", "required": true, "max": 200 },
+          { "key": "nombre_fantasia", "type": "text", "label": "Nombre de fantasía", "max": 200 },
+          { "key": "pais_constitucion", "type": "country", "label": "País de constitución", "required": true },
+          { "key": "rut_empresa", "type": "id", "idKind": "rut", "label": "RUT de la empresa", "required": true,
+            "showIf": { "field": "pais_constitucion", "op": "eq", "value": "CL" } },
+          { "key": "id_tributario", "type": "text", "label": "Identificador tributario", "help": "Número de registro fiscal en el país de constitución.", "required": true,
+            "showIf": { "field": "pais_constitucion", "op": "neq", "value": "CL" } },
+          { "key": "tipo_sociedad", "type": "select", "label": "Tipo de sociedad", "required": true,
+            "options": ["Sociedad por Acciones (SpA)", "Sociedad Anónima (S.A.)", "Responsabilidad Limitada (Ltda.)", "Empresa Individual (EIRL)", "Fundación o corporación", "Otra"] },
+          { "key": "fecha_constitucion", "type": "date", "label": "Fecha de constitución", "required": true },
+          { "key": "giro", "type": "text", "label": "Giro o actividad principal", "required": true, "max": 200 },
+          { "key": "sitio_web", "type": "url", "label": "Sitio web" },
+          { "key": "direccion", "type": "address", "label": "Domicilio legal", "required": true },
+          { "key": "telefono", "type": "phone", "label": "Teléfono", "required": true },
+          { "key": "email_contacto", "type": "email", "label": "Email de contacto", "required": true }
+        ]
+      },
+      {
+        "key": "representante",
+        "title": "Representante legal",
+        "description": "La persona con poder para abrir y operar la cuenta.",
+        "fields": [
+          { "key": "rep_nombre", "type": "text", "label": "Nombre completo", "required": true },
+          { "key": "rep_tipo_documento", "type": "radio", "label": "Tipo de documento", "required": true, "options": ["Cédula / RUT", "Pasaporte", "DNI"] },
+          { "key": "rep_documento", "type": "text", "label": "Número de documento", "required": true },
+          { "key": "rep_nacionalidad", "type": "country", "label": "Nacionalidad", "required": true },
+          { "key": "rep_cargo", "type": "text", "label": "Cargo", "required": true },
+          { "key": "rep_email", "type": "email", "label": "Email", "required": true },
+          { "key": "rep_telefono", "type": "phone", "label": "Teléfono", "required": true },
+          { "key": "rep_poder", "type": "file", "label": "Poder o escritura que acredita la representación", "required": true,
+            "accept": ["application/pdf", "image/*"], "maxMb": 10 }
+        ]
+      },
+      {
+        "key": "beneficiarios",
+        "title": "Beneficiarios finales",
+        "fields": [
+          { "key": "ubo_info", "type": "info", "label": "¿A quién incluir?",
+            "help": "Incluye a toda persona natural que tenga, directa o indirectamente, 25% o más de la propiedad o que ejerza el control de la empresa." },
+          { "key": "beneficiarios", "type": "repeater", "label": "Beneficiarios finales", "required": true, "min": 1, "max": 10,
+            "fields": [
+              { "key": "nombre", "type": "text", "label": "Nombre completo", "required": true },
+              { "key": "documento", "type": "text", "label": "Documento de identidad", "required": true },
+              { "key": "nacionalidad", "type": "country", "label": "Nacionalidad", "required": true },
+              { "key": "participacion", "type": "number", "label": "% de participación", "required": true, "min": 0, "max": 100 }
+            ] }
+        ]
+      },
+      {
+        "key": "perfil",
+        "title": "Perfil de la cuenta",
+        "fields": [
+          { "key": "proposito", "type": "multiselect", "label": "Para qué usará la cuenta", "required": true,
+            "options": ["Pagos a proveedores", "Cobros a clientes", "Pago de remuneraciones", "Inversiones", "Comercio exterior", "Otro"] },
+          { "key": "ventas_anuales", "type": "select", "label": "Ventas anuales aproximadas (USD)", "required": true,
+            "options": ["Menos de 100.000", "100.000 a 1 millón", "1 a 10 millones", "Más de 10 millones"] },
+          { "key": "origen_fondos", "type": "textarea", "label": "Origen de los fondos", "help": "Describe de dónde provienen los fondos que se moverán en la cuenta.", "required": true, "max": 1000 },
+          { "key": "pep", "type": "yesno", "label": "¿Algún socio, director o representante es Persona Expuesta Políticamente (PEP)?", "required": true },
+          { "key": "pep_detalle", "type": "textarea", "label": "Indica quién y qué cargo público ejerce o ejerció", "required": true,
+            "showIf": { "field": "pep", "op": "eq", "value": "Sí" } }
+        ]
+      },
+      {
+        "key": "documentos",
+        "title": "Documentos y declaración",
+        "fields": [
+          { "key": "doc_constitucion", "type": "file", "label": "Escritura de constitución y modificaciones", "required": true, "accept": ["application/pdf"], "maxMb": 20 },
+          { "key": "doc_vigencia", "type": "file", "label": "Certificado de vigencia (máximo 60 días)", "required": true, "accept": ["application/pdf"], "maxMb": 10 },
+          { "key": "doc_tributario", "type": "file", "label": "Documento tributario (e-RUT o equivalente)", "required": true, "accept": ["application/pdf", "image/*"], "maxMb": 10 },
+          { "key": "doc_financieros", "type": "file", "label": "Últimos estados financieros", "accept": ["application/pdf", ".xlsx"], "maxMb": 20 },
+          { "key": "declaracion", "type": "checkbox", "label": "Declaro que la información entregada es verdadera y autorizo su verificación.", "required": true },
+          { "key": "firma", "type": "signature", "label": "Firma del representante legal", "required": true }
+        ]
+      }
+    ]
+  }
+}
