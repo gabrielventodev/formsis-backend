@@ -135,7 +135,7 @@ Owners y admins registran hasta 10 endpoints en `/api/v1/admin/webhooks`. Cada u
           "step": {"number": 2, "name": "Cumplimiento", "final": true}}}
 ```
 
-Con "Incluir respuestas" el payload trae además `data.answers` (las respuestas del formulario; los archivos van como metadatos, no su contenido).
+Con "Incluir respuestas" el payload trae además `data.answers` (las respuestas del formulario; los archivos adjuntos no se incluyen, se revisan en el panel con `admin_url`).
 
 **Firma.** Cada request lleva `FormFlow-Event`, `FormFlow-Delivery` (id único, úsalo para descartar duplicados) y `FormFlow-Signature: t=<unix>,v1=<hex>`, donde `v1` es HMAC-SHA256 con el secreto del webhook sobre `"<t>.<body>"`. Verifica la firma con el body crudo y rechaza `t` con más de 5 minutos de diferencia. El secreto (`whsec_…`) se muestra una sola vez al crear o rotar.
 
