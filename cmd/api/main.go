@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/gabrielventodev/formflow/api/internal/auth"
+	"github.com/gabrielventodev/formflow/api/internal/branding"
 	"github.com/gabrielventodev/formflow/api/internal/config"
 	"github.com/gabrielventodev/formflow/api/internal/db"
 	"github.com/gabrielventodev/formflow/api/internal/forms"
@@ -62,7 +64,18 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	mail := mailer.New(cfg.Mail)
+	// Every email gets an HTML version in the organization's colors and logo.
+	mail := mailer.Branded{Inner: mailer.New(cfg.Mail), Brand: func(ctx context.Context) (mailer.Brand, error) {
+		b, err := branding.Load(ctx, pool, orgID)
+		if err != nil {
+			return mailer.Brand{}, err
+		}
+		mb := mailer.Brand{Name: b.Name, Color: b.Color(), SupportEmail: b.SupportEmail}
+		if p := b.LogoPath(); p != "" {
+			mb.LogoURL = strings.TrimRight(cfg.WebPublicURL, "/") + p
+		}
+		return mb, nil
+	}}
 	portalHandler := &portal.Handler{
 		DB: pool, Store: store, Mail: mail,
 		WebURL: cfg.WebPublicURL, MaxUploadMB: cfg.MaxUploadMB, OrgID: orgID,
@@ -80,6 +93,7 @@ func run() error {
 			Links:        portalHandler.AdminRoutes(),
 			Mail:         mail,
 			WebURL:       cfg.WebPublicURL,
+			Uploads:      store,
 		}).Routes(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}

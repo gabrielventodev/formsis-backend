@@ -15,6 +15,7 @@ type Message struct {
 	To      string
 	Subject string
 	Text    string
+	HTML    string // optional; sent as multipart/alternative next to Text
 }
 
 type Mailer interface {
@@ -59,7 +60,17 @@ func (s *SMTP) Send(_ context.Context, m Message) error {
 	fmt.Fprintf(&b, "To: %s\r\n", m.To)
 	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", m.Subject))
 	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
-	b.WriteString("MIME-Version: 1.0\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
-	b.WriteString(strings.ReplaceAll(m.Text, "\n", "\r\n"))
+	b.WriteString("MIME-Version: 1.0\r\n")
+	crlf := func(s string) string { return strings.ReplaceAll(strings.ReplaceAll(s, "\r\n", "\n"), "\n", "\r\n") }
+	if m.HTML == "" {
+		b.WriteString("Content-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n")
+		b.WriteString(crlf(m.Text))
+	} else {
+		boundary := fmt.Sprintf("ff-%d", time.Now().UnixNano())
+		fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=%q\r\n\r\n", boundary)
+		fmt.Fprintf(&b, "--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n", boundary, crlf(m.Text))
+		fmt.Fprintf(&b, "--%s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n", boundary, crlf(m.HTML))
+		fmt.Fprintf(&b, "--%s--\r\n", boundary)
+	}
 	return smtp.SendMail(s.cfg.Host+":"+s.cfg.Port, auth, s.cfg.From, []string{m.To}, []byte(b.String()))
 }

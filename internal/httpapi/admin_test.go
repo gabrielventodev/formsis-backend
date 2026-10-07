@@ -66,7 +66,7 @@ func adminTestServer(t *testing.T) (*httptest.Server, *pgxpool.Pool, fakeMail) {
 	}
 	mail := make(fakeMail, 10)
 	srv := httptest.NewServer((&Server{DB: pool, OrgID: "unused", WebOrigin: "http://localhost:3000", Files: store,
-		Mail: mail, WebURL: "https://forms.example.com"}).Routes())
+		Mail: mail, WebURL: "https://forms.example.com", Uploads: store}).Routes())
 	t.Cleanup(srv.Close)
 	return srv, pool, mail
 }
