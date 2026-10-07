@@ -194,6 +194,9 @@ func TestAdminReviewFlow(t *testing.T) {
 	if code, body := c.do("POST", "/api/v1/admin/submissions/"+subID+"/transition", map[string]string{"to": "in_review", "from": "submitted"}); code != http.StatusOK {
 		t.Fatalf("start review: %d %s", code, body)
 	}
+	if m := mail.next(t); m.To != "pedro@cliente.cl" || !strings.HasPrefix(m.Subject, "Estamos revisando") {
+		t.Fatalf("review started email: %+v", m)
+	}
 	// Stale UI: the client thinks it is still "submitted".
 	if code, _ := c.do("POST", "/api/v1/admin/submissions/"+subID+"/transition", map[string]string{"to": "approved", "from": "submitted"}); code != http.StatusConflict {
 		t.Fatalf("stale transition: %d", code)
