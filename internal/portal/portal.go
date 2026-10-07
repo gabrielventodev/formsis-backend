@@ -22,6 +22,7 @@ import (
 
 	"github.com/gabrielventodev/formflow/api/internal/mailer"
 	"github.com/gabrielventodev/formflow/api/internal/storage"
+	"github.com/gabrielventodev/formflow/api/internal/webhooks"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -38,6 +39,8 @@ type Handler struct {
 	MaxUploadMB float64
 	// OrgID scopes the admin link routes to the MVP's single organization.
 	OrgID string
+	// Webhooks is woken after a submission queues webhook deliveries (nil is fine).
+	Webhooks *webhooks.Worker
 }
 
 func (h *Handler) Routes() http.Handler {

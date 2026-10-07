@@ -11,6 +11,7 @@ import (
 
 	"github.com/gabrielventodev/formflow/api/internal/mailer"
 	"github.com/gabrielventodev/formflow/api/internal/schema"
+	"github.com/gabrielventodev/formflow/api/internal/webhooks"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -352,7 +353,13 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 		}
-		return audit(ctx, tx, s.ID, s.Email, action, &from, strPtr("submitted"), nil)
+		if err := audit(ctx, tx, s.ID, s.Email, action, &from, strPtr("submitted"), nil); err != nil {
+			return err
+		}
+		return webhooks.EnqueueSubmission(ctx, tx, webhooks.SubmissionEvent{
+			Type: webhooks.EventSubmitted, SubmissionID: s.ID, FromStatus: from, WebURL: h.WebURL,
+			Extra: map[string]any{"resubmitted": from == "changes_requested"},
+		})
 	})
 	if err != nil {
 		serverError(w, r, err)
@@ -367,6 +374,7 @@ func (h *Handler) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.Webhooks.Kick()
 	subject := "Recibimos tu solicitud: " + s.FormTitle
 	if from == "changes_requested" {
 		subject = "Recibimos tus correcciones: " + s.FormTitle

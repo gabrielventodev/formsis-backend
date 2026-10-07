@@ -70,6 +70,7 @@ Este repositorio es el backend publicado aparte para llevarle seguimiento. Su hi
 | `ADMIN_NAME` | `Administrador` | Nombre de esa cuenta |
 | `ORG_NAME` | `Mi organización` | Nombre de la organización |
 | `COOKIE_SECURE` | `false` | `true` detrás de HTTPS para marcar la cookie de sesión como Secure |
+| `WEBHOOKS_ALLOW_INSECURE` | `false` | Solo desarrollo: permite webhooks a `http://` y a direcciones privadas o locales |
 
 ## Migraciones
 
@@ -112,6 +113,35 @@ Cada formulario puede tener hasta 5 pasos de aprobación en orden (por ejemplo C
 `GET/PUT /api/v1/admin/organization` (owners y admins) cambia el nombre, el color principal y el email de contacto; `POST/DELETE /api/v1/admin/organization/logo` sube o quita el logo (PNG, JPG o WebP, hasta 1 MB; SVG no se acepta porque puede llevar scripts). El color debe tener contraste AA (4,5:1) con texto blanco, porque es el fondo de los botones.
 
 El portal lo lee sin sesión desde `GET /api/v1/branding` y `GET /api/v1/branding/logo`. Todos los correos salen además en HTML con el color, el logo y el email de contacto (`mailer.Branded`); la versión de texto plano se mantiene.
+
+## Webhooks salientes
+
+Owners y admins registran hasta 10 endpoints en `/api/v1/admin/webhooks`. Cada uno recibe un `POST` JSON cuando un envío cambia de estado:
+
+| Evento | Cuándo |
+| --- | --- |
+| `submission.submitted` | El solicitante envía (o reenvía tras correcciones: `data.resubmitted = true`) |
+| `submission.in_review` | Alguien toma el envío, o se reabre una decisión |
+| `submission.step_approved` | Se firma un paso intermedio del flujo de aprobación |
+| `submission.changes_requested` | Se piden correcciones |
+| `submission.approved` / `submission.rejected` | Decisión final |
+| `ping` | Botón "Enviar prueba" |
+
+```json
+{"id": "evt_…", "type": "submission.approved", "created_at": "2026-10-06T12:00:00Z",
+ "data": {"submission": {"id": "…", "status": "approved", "approval_step": 2, "submitted_at": "…", "decided_at": "…", "admin_url": "https://…/admin/envios/…"},
+          "form": {"id": "…", "title": "Onboarding empresas", "version": 3},
+          "applicant": {"email": "…", "name": "…"}, "from_status": "in_review",
+          "step": {"number": 2, "name": "Cumplimiento", "final": true}}}
+```
+
+Con "Incluir respuestas" el payload trae además `data.answers` (las respuestas del formulario; los archivos adjuntos no se incluyen, se revisan en el panel con `admin_url`).
+
+**Firma.** Cada request lleva `FormFlow-Event`, `FormFlow-Delivery` (id único, úsalo para descartar duplicados) y `FormFlow-Signature: t=<unix>,v1=<hex>`, donde `v1` es HMAC-SHA256 con el secreto del webhook sobre `"<t>.<body>"`. Verifica la firma con el body crudo y rechaza `t` con más de 5 minutos de diferencia. El secreto (`whsec_…`) se muestra una sola vez al crear o rotar.
+
+**Entregas.** Se encolan en la misma transacción que el cambio de estado y un worker dentro de la API las envía. Una respuesta 2xx es éxito; cualquier otra cosa (incluidas redirecciones y timeouts de 15 s) se reintenta tras 1, 2, 4 … 64 minutos, hasta 8 intentos. Las fallidas se pueden reintentar a mano y el historial muestra código y error de cada una.
+
+**Seguridad.** Solo `https://` a direcciones públicas: se rechazan localhost, redes privadas, link-local (metadatos de nube) y CGNAT, también al conectar (contra DNS rebinding). `WEBHOOKS_ALLOW_INSECURE=true` lo relaja para desarrollo.
 
 ## Docker
 
