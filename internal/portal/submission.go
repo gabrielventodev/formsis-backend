@@ -59,18 +59,22 @@ type queryer interface {
 }
 
 func (h *Handler) loadSubmission(ctx context.Context, q queryer, tokenHash string, forUpdate bool) (*submission, error) {
+	return h.loadSubmissionWhere(ctx, q, "s.access_token_hash = $1", tokenHash, forUpdate)
+}
+
+func (h *Handler) loadSubmissionWhere(ctx context.Context, q queryer, where string, arg any, forUpdate bool) (*submission, error) {
 	sql := `
 		SELECT s.id, s.organization_id, f.title, f.description, s.applicant_email, s.applicant_name,
 		       s.status, s.data, v.schema, s.submitted_at, s.updated_at
 		FROM submissions s
 		JOIN forms f ON f.id = s.form_id
 		JOIN form_versions v ON v.id = s.form_version_id
-		WHERE s.access_token_hash = $1`
+		WHERE ` + where
 	if forUpdate {
 		sql += " FOR UPDATE OF s"
 	}
 	var s submission
-	err := q.QueryRow(ctx, sql, tokenHash).Scan(&s.ID, &s.OrgID, &s.FormTitle, &s.FormDesc, &s.Email, &s.Name,
+	err := q.QueryRow(ctx, sql, arg).Scan(&s.ID, &s.OrgID, &s.FormTitle, &s.FormDesc, &s.Email, &s.Name,
 		&s.Status, &s.Data, &s.RawSchema, &s.SubmittedAt, &s.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -164,6 +168,11 @@ func (h *Handler) getSubmission(w http.ResponseWriter, r *http.Request) {
 		serverError(w, r, err)
 		return
 	}
+	liveness, err := h.listLiveness(ctx, s.ID)
+	if err != nil {
+		serverError(w, r, err)
+		return
+	}
 	var comments []commentOut
 	if s.Status == "changes_requested" {
 		if comments, err = h.openComments(ctx, s.ID); err != nil {
@@ -184,6 +193,7 @@ func (h *Handler) getSubmission(w http.ResponseWriter, r *http.Request) {
 		"data":           s.Data,
 		"schema":         s.RawSchema,
 		"files":          nonNil(files),
+		"liveness":       nonNil(liveness),
 		"comments":       nonNil(comments),
 		"canEdit":        ok,
 		"editableFields": editableFields, // null = all fields
@@ -259,7 +269,10 @@ func (h *Handler) storeData(ctx context.Context, s *submission, in map[string]an
 
 func (h *Handler) fileCounts(ctx context.Context, subID string) (schema.FileCounts, error) {
 	rows, err := h.DB.Query(ctx, `
-		SELECT field_key, count(*) FROM submission_files WHERE submission_id = $1 GROUP BY field_key`, subID)
+		SELECT field_key, count(*) FROM submission_files WHERE submission_id = $1 GROUP BY field_key
+		UNION ALL
+		SELECT field_key, count(*) FROM liveness_checks
+		WHERE submission_id = $1 AND decision IN ('pass', 'review') GROUP BY field_key`, subID)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +284,7 @@ func (h *Handler) fileCounts(ctx context.Context, subID string) (schema.FileCoun
 		if err := rows.Scan(&k, &n); err != nil {
 			return nil, err
 		}
-		counts[k] = n
+		counts[k] += n
 	}
 	return counts, rows.Err()
 }

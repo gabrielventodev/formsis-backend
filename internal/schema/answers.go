@@ -16,7 +16,8 @@ import (
 // Errors maps an answer path ("razon_social", "socios.0.nombre") to a message for the applicant.
 type Errors map[string]string
 
-// FileCounts maps a file field path to how many files are uploaded for it.
+// FileCounts maps a file field path to how many files are uploaded for it, and a liveness
+// field key to how many completed (pass or review) liveness checks it has.
 type FileCounts map[string]int
 
 var (
@@ -129,6 +130,12 @@ func AnswerError(f Field, v any, path string, files FileCounts) string {
 	if f.Type == TypeFile {
 		if f.Required && files[path] == 0 {
 			return "Adjunta un archivo"
+		}
+		return ""
+	}
+	if f.Type == TypeLiveness {
+		if f.Required && files[path] == 0 {
+			return "Completa la verificación con tu cámara"
 		}
 		return ""
 	}
@@ -321,7 +328,7 @@ func (s Schema) Clean(answers map[string]any) map[string]any {
 func cleanFields(fields []Field, in, out map[string]any) {
 	for _, f := range fields {
 		v, ok := in[f.Key]
-		if !ok || f.Type == TypeFile || !f.Type.HasAnswer() {
+		if !ok || f.Type == TypeFile || f.Type == TypeLiveness || !f.Type.HasAnswer() {
 			continue
 		}
 		if f.Type == TypeRepeater {
