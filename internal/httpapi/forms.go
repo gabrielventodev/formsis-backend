@@ -19,6 +19,8 @@ import (
 func (s *Server) formRoutes(r chi.Router) {
 	r.Get("/", s.listForms)
 	r.Post("/", s.createForm)
+	r.Get("/templates", s.listTemplates)
+	r.Post("/templates/{key}", s.createFromTemplate)
 	r.Route("/{formID}", func(r chi.Router) {
 		r.Get("/", s.getForm)
 		r.Patch("/", s.updateForm)
@@ -77,6 +79,41 @@ func (s *Server) createForm(w http.ResponseWriter, r *http.Request) {
 		desc = *in.Description
 	}
 	f, err := s.forms().Create(r.Context(), s.OrgID, title, desc)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, f)
+}
+
+func (s *Server) listTemplates(w http.ResponseWriter, r *http.Request) {
+	list, err := forms.Templates()
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	out := make([]forms.TemplateInfo, len(list))
+	for i, t := range list {
+		out[i] = t.Info()
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// createFromTemplate starts a draft from a ready-made form; the body may carry a title.
+func (s *Server) createFromTemplate(w http.ResponseWriter, r *http.Request) {
+	var in formInput
+	if !readJSON(w, r, &in) {
+		return
+	}
+	title := ""
+	if in.Title != nil {
+		title = strings.TrimSpace(*in.Title)
+	}
+	f, err := s.forms().CreateFromTemplate(r.Context(), s.OrgID, chi.URLParam(r, "key"), title)
+	if errors.Is(err, forms.ErrTemplateNotFound) {
+		writeError(w, http.StatusNotFound, err.Error(), nil)
+		return
+	}
 	if err != nil {
 		s.fail(w, err)
 		return
