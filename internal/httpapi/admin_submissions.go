@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/auth"
-	"github.com/gabrielventodev/formflow/api/internal/webhooks"
+	"github.com/gabrielventodev/formsis/api/internal/auth"
+	"github.com/gabrielventodev/formsis/api/internal/webhooks"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )

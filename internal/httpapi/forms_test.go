@@ -9,13 +9,13 @@ import (
 	"os"
 	"testing"
 
-	"github.com/gabrielventodev/formflow/api/internal/auth"
-	"github.com/gabrielventodev/formflow/api/internal/db"
-	"github.com/gabrielventodev/formflow/api/internal/forms"
+	"github.com/gabrielventodev/formsis/api/internal/auth"
+	"github.com/gabrielventodev/formsis/api/internal/db"
+	"github.com/gabrielventodev/formsis/api/internal/forms"
 )
 
 // Runs against a real Postgres when TEST_DATABASE_URL is set, e.g.
-// TEST_DATABASE_URL=postgres://formflow:formflow@localhost:5432/formflow?sslmode=disable
+// TEST_DATABASE_URL=postgres://formsis:formsis@localhost:5432/formsis?sslmode=disable
 func testServer(t *testing.T) http.Handler {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")

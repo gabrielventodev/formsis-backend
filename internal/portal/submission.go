@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/mailer"
-	"github.com/gabrielventodev/formflow/api/internal/schema"
-	"github.com/gabrielventodev/formflow/api/internal/webhooks"
+	"github.com/gabrielventodev/formsis/api/internal/mailer"
+	"github.com/gabrielventodev/formsis/api/internal/schema"
+	"github.com/gabrielventodev/formsis/api/internal/webhooks"
 	"github.com/jackc/pgx/v5"
 )
 

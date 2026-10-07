@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/mailer"
-	"github.com/gabrielventodev/formflow/api/internal/storage"
-	"github.com/gabrielventodev/formflow/api/internal/webhooks"
+	"github.com/gabrielventodev/formsis/api/internal/mailer"
+	"github.com/gabrielventodev/formsis/api/internal/storage"
+	"github.com/gabrielventodev/formsis/api/internal/webhooks"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5/pgxpool"

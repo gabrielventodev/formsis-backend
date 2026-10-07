@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/gabrielventodev/formflow/api/internal/config"
-	"github.com/gabrielventodev/formflow/api/internal/db"
-	"github.com/gabrielventodev/formflow/api/internal/forms"
-	"github.com/gabrielventodev/formflow/api/internal/schema"
+	"github.com/gabrielventodev/formsis/api/internal/config"
+	"github.com/gabrielventodev/formsis/api/internal/db"
+	"github.com/gabrielventodev/formsis/api/internal/forms"
+	"github.com/gabrielventodev/formsis/api/internal/schema"
 	"github.com/jackc/pgx/v5"
 )
 

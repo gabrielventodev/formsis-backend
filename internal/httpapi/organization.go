@@ -14,8 +14,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/gabrielventodev/formflow/api/internal/auth"
-	"github.com/gabrielventodev/formflow/api/internal/branding"
+	"github.com/gabrielventodev/formsis/api/internal/auth"
+	"github.com/gabrielventodev/formsis/api/internal/branding"
 	"github.com/jackc/pgx/v5"
 )
 

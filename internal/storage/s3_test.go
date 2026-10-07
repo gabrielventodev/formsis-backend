@@ -18,7 +18,7 @@ func TestS3(t *testing.T) {
 	defer srv.Close()
 
 	s, err := NewS3(ctx, Config{
-		Endpoint: strings.TrimPrefix(srv.URL, "http://"), Bucket: "formflow",
+		Endpoint: strings.TrimPrefix(srv.URL, "http://"), Bucket: "formsis",
 		AccessKey: "k", SecretKey: "s", Region: "us-east-1",
 	})
 	if err != nil {
@@ -43,7 +43,7 @@ func TestS3(t *testing.T) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 	// Creating the store again finds the existing bucket.
-	if _, err := NewS3(ctx, Config{Endpoint: strings.TrimPrefix(srv.URL, "http://"), Bucket: "formflow", AccessKey: "k", SecretKey: "s", Region: "us-east-1"}); err != nil {
+	if _, err := NewS3(ctx, Config{Endpoint: strings.TrimPrefix(srv.URL, "http://"), Bucket: "formsis", AccessKey: "k", SecretKey: "s", Region: "us-east-1"}); err != nil {
 		t.Fatal(err)
 	}
 }

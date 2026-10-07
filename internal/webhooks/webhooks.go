@@ -53,7 +53,7 @@ func NewSecret() string {
 	return "whsec_" + hex.EncodeToString(b)
 }
 
-// Sign returns the FormFlow-Signature header value: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">.
+// Sign returns the Formsis-Signature header value: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">.
 func Sign(secret string, t time.Time, body []byte) string {
 	ts := strconv.FormatInt(t.Unix(), 10)
 	mac := hmac.New(sha256.New, []byte(secret))
@@ -191,7 +191,7 @@ func EnqueueSubmission(ctx context.Context, tx pgx.Tx, ev SubmissionEvent) error
 // EnqueuePing queues a test event for one endpoint and returns the delivery id.
 func EnqueuePing(ctx context.Context, tx pgx.Tx, hookID string) (string, error) {
 	p := Payload{ID: newEventID(), Type: EventPing, CreatedAt: time.Now().UTC(), Data: map[string]any{
-		"message": "Prueba de webhook desde FormFlow",
+		"message": "Prueba de webhook desde Formsis",
 	}}
 	b, err := json.Marshal(p)
 	if err != nil {

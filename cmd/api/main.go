@@ -12,17 +12,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/auth"
-	"github.com/gabrielventodev/formflow/api/internal/branding"
-	"github.com/gabrielventodev/formflow/api/internal/config"
-	"github.com/gabrielventodev/formflow/api/internal/db"
-	"github.com/gabrielventodev/formflow/api/internal/face"
-	"github.com/gabrielventodev/formflow/api/internal/forms"
-	"github.com/gabrielventodev/formflow/api/internal/httpapi"
-	"github.com/gabrielventodev/formflow/api/internal/mailer"
-	"github.com/gabrielventodev/formflow/api/internal/portal"
-	"github.com/gabrielventodev/formflow/api/internal/storage"
-	"github.com/gabrielventodev/formflow/api/internal/webhooks"
+	"github.com/gabrielventodev/formsis/api/internal/auth"
+	"github.com/gabrielventodev/formsis/api/internal/branding"
+	"github.com/gabrielventodev/formsis/api/internal/config"
+	"github.com/gabrielventodev/formsis/api/internal/db"
+	"github.com/gabrielventodev/formsis/api/internal/face"
+	"github.com/gabrielventodev/formsis/api/internal/forms"
+	"github.com/gabrielventodev/formsis/api/internal/httpapi"
+	"github.com/gabrielventodev/formsis/api/internal/mailer"
+	"github.com/gabrielventodev/formsis/api/internal/portal"
+	"github.com/gabrielventodev/formsis/api/internal/storage"
+	"github.com/gabrielventodev/formsis/api/internal/webhooks"
 )
 
 func main() {

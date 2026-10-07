@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/auth"
+	"github.com/gabrielventodev/formsis/api/internal/auth"
 )
 
 type activityRow struct {

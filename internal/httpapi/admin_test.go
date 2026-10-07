@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/auth"
-	"github.com/gabrielventodev/formflow/api/internal/db"
-	"github.com/gabrielventodev/formflow/api/internal/mailer"
-	"github.com/gabrielventodev/formflow/api/internal/storage"
+	"github.com/gabrielventodev/formsis/api/internal/auth"
+	"github.com/gabrielventodev/formsis/api/internal/db"
+	"github.com/gabrielventodev/formsis/api/internal/mailer"
+	"github.com/gabrielventodev/formsis/api/internal/storage"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

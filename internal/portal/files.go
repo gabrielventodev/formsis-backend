@@ -10,8 +10,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/gabrielventodev/formflow/api/internal/schema"
-	"github.com/gabrielventodev/formflow/api/internal/storage"
+	"github.com/gabrielventodev/formsis/api/internal/schema"
+	"github.com/gabrielventodev/formsis/api/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )

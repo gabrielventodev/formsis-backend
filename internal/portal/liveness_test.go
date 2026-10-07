@@ -13,7 +13,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/gabrielventodev/formflow/api/internal/face"
+	"github.com/gabrielventodev/formsis/api/internal/face"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

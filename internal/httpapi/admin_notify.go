@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/mailer"
+	"github.com/gabrielventodev/formsis/api/internal/mailer"
 	"github.com/jackc/pgx/v5"
 )
 

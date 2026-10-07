@@ -93,7 +93,7 @@ func VerifyPassword(password, encoded string) bool {
 }
 
 // dummyHash keeps login timing similar whether or not the email exists.
-var dummyHash, _ = HashPassword("formflow-dummy-password")
+var dummyHash, _ = HashPassword("formsis-dummy-password")
 
 func hashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))

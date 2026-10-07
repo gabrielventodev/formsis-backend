@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/auth"
+	"github.com/gabrielventodev/formsis/api/internal/auth"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
 )

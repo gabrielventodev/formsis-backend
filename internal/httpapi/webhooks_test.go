@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/db"
-	"github.com/gabrielventodev/formflow/api/internal/webhooks"
+	"github.com/gabrielventodev/formsis/api/internal/db"
+	"github.com/gabrielventodev/formsis/api/internal/webhooks"
 )
 
 type received struct {
@@ -31,7 +31,7 @@ func (rc *receiver) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
-	rc.got = append(rc.got, received{r.Header.Get("FormFlow-Event"), r.Header.Get("FormFlow-Delivery"), r.Header.Get("FormFlow-Signature"), body})
+	rc.got = append(rc.got, received{r.Header.Get("Formsis-Event"), r.Header.Get("Formsis-Delivery"), r.Header.Get("Formsis-Signature"), body})
 	w.WriteHeader(rc.code)
 	_, _ = w.Write([]byte("nope"))
 }

@@ -2,7 +2,7 @@
 
 API en Go del sistema de pre-onboarding (constructor de formularios, portal de llenado y panel administrativo).
 
-Este repositorio es el backend publicado aparte para llevarle seguimiento. Su historial viene de la carpeta `api/` del monorepo [formflow-v2](https://github.com/gabrielventodev/formflow-v2), donde vive el frontend en Next.js.
+Este repositorio es el backend publicado aparte para llevarle seguimiento. Su historial viene de la carpeta `api/` del monorepo [formsis-v2](https://github.com/gabrielventodev/formsis-v2), donde vive el frontend en Next.js.
 
 ## Stack
 
@@ -22,7 +22,7 @@ Este repositorio es el backend publicado aparte para llevarle seguimiento. Su hi
 
    ```sh
    docker run -d --name formsis-db -p 5432:5432 \
-     -e POSTGRES_USER=formflow -e POSTGRES_PASSWORD=formflow -e POSTGRES_DB=formflow \
+     -e POSTGRES_USER=formsis -e POSTGRES_PASSWORD=formsis -e POSTGRES_DB=formsis \
      postgres:17-alpine
    ```
 
@@ -51,21 +51,21 @@ Este repositorio es el backend publicado aparte para llevarle seguimiento. Su hi
 | Variable | Por defecto | Para qué sirve |
 | --- | --- | --- |
 | `API_ADDR` | `:8080` | Dirección donde escucha la API |
-| `DATABASE_URL` | `postgres://formflow:formflow@localhost:5432/formflow?sslmode=disable` | Conexión a Postgres |
+| `DATABASE_URL` | `postgres://formsis:formsis@localhost:5432/formsis?sslmode=disable` | Conexión a Postgres |
 | `WEB_ORIGIN` | `http://localhost:3000` | Origen del frontend permitido por CORS |
 | `WEB_PUBLIC_URL` | igual que `WEB_ORIGIN` | URL base de los enlaces que reciben los solicitantes |
 | `MAX_UPLOAD_MB` | `25` | Tamaño máximo por archivo subido |
 | `STORAGE_DRIVER` | `local` | `local` (disco) o `s3` |
 | `STORAGE_DIR` | `data/uploads` | Carpeta de archivos con el driver `local` |
 | `S3_ENDPOINT` | `localhost:9000` | Endpoint S3 (sin `http://`) |
-| `S3_BUCKET` | `formflow` | Bucket |
+| `S3_BUCKET` | `formsis` | Bucket |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | vacío | Credenciales S3 |
 | `S3_REGION` | `us-east-1` | Región S3 |
 | `S3_USE_SSL` | `false` | `true` si el endpoint usa HTTPS |
 | `SMTP_HOST` | vacío | Servidor SMTP; vacío desactiva el envío de correos |
 | `SMTP_PORT` | `587` | Puerto SMTP |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | vacío | Credenciales SMTP |
-| `MAIL_FROM` | `FormFlow <no-reply@localhost>` | Remitente de los correos |
+| `MAIL_FROM` | `Formsis <no-reply@localhost>` | Remitente de los correos |
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | vacío | Cuenta de administrador inicial |
 | `ADMIN_NAME` | `Administrador` | Nombre de esa cuenta |
 | `ORG_NAME` | `Mi organización` | Nombre de la organización |
@@ -154,7 +154,7 @@ Owners y admins registran hasta 10 endpoints en `/api/v1/admin/webhooks`. Cada u
 
 Con "Incluir respuestas" el payload trae además `data.answers` (las respuestas del formulario; los archivos adjuntos no se incluyen, se revisan en el panel con `admin_url`).
 
-**Firma.** Cada request lleva `FormFlow-Event`, `FormFlow-Delivery` (id único, úsalo para descartar duplicados) y `FormFlow-Signature: t=<unix>,v1=<hex>`, donde `v1` es HMAC-SHA256 con el secreto del webhook sobre `"<t>.<body>"`. Verifica la firma con el body crudo y rechaza `t` con más de 5 minutos de diferencia. El secreto (`whsec_…`) se muestra una sola vez al crear o rotar.
+**Firma.** Cada request lleva `Formsis-Event`, `Formsis-Delivery` (id único, úsalo para descartar duplicados) y `Formsis-Signature: t=<unix>,v1=<hex>`, donde `v1` es HMAC-SHA256 con el secreto del webhook sobre `"<t>.<body>"`. Verifica la firma con el body crudo y rechaza `t` con más de 5 minutos de diferencia. El secreto (`whsec_…`) se muestra una sola vez al crear o rotar.
 
 **Entregas.** Se encolan en la misma transacción que el cambio de estado y un worker dentro de la API las envía. Una respuesta 2xx es éxito; cualquier otra cosa (incluidas redirecciones y timeouts de 15 s) se reintenta tras 1, 2, 4 … 64 minutos, hasta 8 intentos. Las fallidas se pueden reintentar a mano y el historial muestra código y error de cada una.
 

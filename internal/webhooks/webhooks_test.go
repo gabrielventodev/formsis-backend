@@ -31,7 +31,7 @@ func TestSignVerify(t *testing.T) {
 }
 
 func TestValidateURL(t *testing.T) {
-	good := []string{"https://hooks.example.com/formflow", "https://1.1.1.1/x?a=b"}
+	good := []string{"https://hooks.example.com/formsis", "https://1.1.1.1/x?a=b"}
 	for _, u := range good {
 		if _, err := ValidateURL(u, false); err != nil {
 			t.Errorf("%s: %v", u, err)

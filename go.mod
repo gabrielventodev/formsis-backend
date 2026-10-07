@@ -1,4 +1,4 @@
-module github.com/gabrielventodev/formflow/api
+module github.com/gabrielventodev/formsis/api
 
 go 1.26.0
 

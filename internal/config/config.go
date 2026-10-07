@@ -4,8 +4,8 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/gabrielventodev/formflow/api/internal/mailer"
-	"github.com/gabrielventodev/formflow/api/internal/storage"
+	"github.com/gabrielventodev/formsis/api/internal/mailer"
+	"github.com/gabrielventodev/formsis/api/internal/storage"
 )
 
 type Config struct {
@@ -42,7 +42,7 @@ func Load() Config {
 	maxMB, _ := strconv.ParseFloat(env("MAX_UPLOAD_MB", "25"), 64)
 	return Config{
 		Addr:         env("API_ADDR", ":8080"),
-		DatabaseURL:  env("DATABASE_URL", "postgres://formflow:formflow@localhost:5432/formflow?sslmode=disable"),
+		DatabaseURL:  env("DATABASE_URL", "postgres://formsis:formsis@localhost:5432/formsis?sslmode=disable"),
 		WebOrigin:    origin,
 		WebPublicURL: env("WEB_PUBLIC_URL", origin),
 		MaxUploadMB:  maxMB,
@@ -50,7 +50,7 @@ func Load() Config {
 			Driver:    env("STORAGE_DRIVER", "local"),
 			Dir:       env("STORAGE_DIR", "data/uploads"),
 			Endpoint:  env("S3_ENDPOINT", "localhost:9000"),
-			Bucket:    env("S3_BUCKET", "formflow"),
+			Bucket:    env("S3_BUCKET", "formsis"),
 			AccessKey: env("S3_ACCESS_KEY", ""),
 			SecretKey: env("S3_SECRET_KEY", ""),
 			Region:    env("S3_REGION", "us-east-1"),
@@ -61,7 +61,7 @@ func Load() Config {
 			Port:     env("SMTP_PORT", "587"),
 			Username: env("SMTP_USERNAME", ""),
 			Password: env("SMTP_PASSWORD", ""),
-			From:     env("MAIL_FROM", "FormFlow <no-reply@localhost>"),
+			From:     env("MAIL_FROM", "Formsis <no-reply@localhost>"),
 		},
 		AdminEmail:    os.Getenv("ADMIN_EMAIL"),
 		AdminPassword: os.Getenv("ADMIN_PASSWORD"),

@@ -3,7 +3,7 @@ package forms
 import (
 	"testing"
 
-	"github.com/gabrielventodev/formflow/api/internal/schema"
+	"github.com/gabrielventodev/formsis/api/internal/schema"
 )
 
 // Every template must be publishable as is.

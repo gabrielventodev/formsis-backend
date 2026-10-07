@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/gabrielventodev/formflow/api/internal/forms"
+	"github.com/gabrielventodev/formsis/api/internal/forms"
 )
 
 func TestFormTemplates(t *testing.T) {

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gabrielventodev/formflow/api/internal/face"
-	"github.com/gabrielventodev/formflow/api/internal/schema"
+	"github.com/gabrielventodev/formsis/api/internal/face"
+	"github.com/gabrielventodev/formsis/api/internal/schema"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )

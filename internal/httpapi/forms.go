@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gabrielventodev/formflow/api/internal/forms"
-	"github.com/gabrielventodev/formflow/api/internal/schema"
+	"github.com/gabrielventodev/formsis/api/internal/forms"
+	"github.com/gabrielventodev/formsis/api/internal/schema"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )

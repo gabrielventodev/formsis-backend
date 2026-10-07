@@ -150,10 +150,10 @@ func (w *Worker) send(ctx context.Context, c claimed) (int, error) {
 		return 0, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "FormFlow-Webhooks/1")
-	req.Header.Set("FormFlow-Event", c.event)
-	req.Header.Set("FormFlow-Delivery", c.id)
-	req.Header.Set("FormFlow-Signature", Sign(c.secret, time.Now(), body))
+	req.Header.Set("User-Agent", "Formsis-Webhooks/1")
+	req.Header.Set("Formsis-Event", c.event)
+	req.Header.Set("Formsis-Delivery", c.id)
+	req.Header.Set("Formsis-Signature", Sign(c.secret, time.Now(), body))
 	res, err := w.Client.Do(req)
 	if err != nil {
 		return 0, err
