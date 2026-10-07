@@ -36,6 +36,9 @@ const (
 	TypeAddress     FieldType = "address"   // object, see AddressParts
 	TypeScale       FieldType = "scale"     // integer between Min (default 1) and Max (default 5)
 	TypeSignature   FieldType = "signature" // SVG path data drawn by the applicant
+	// Live camera check that a real person is filling the form. The result lives in
+	// liveness_checks, not in the answers, like uploaded files live in submission_files.
+	TypeLiveness FieldType = "liveness"
 	// Display blocks: they lay out the form and collect no answer.
 	TypeInfo    FieldType = "info"    // highlighted note with title and text
 	TypeHeading FieldType = "heading" // title (Label) with optional subtitle (Help)
@@ -48,7 +51,7 @@ var knownTypes = map[FieldType]bool{
 	TypeDate: true, TypeSelect: true, TypeMultiselect: true, TypeCheckbox: true, TypeFile: true,
 	TypeID: true, TypeRepeater: true, TypeURL: true, TypeCurrency: true, TypeTime: true,
 	TypeDateTime: true, TypeYesNo: true, TypeRadio: true, TypeCountry: true, TypeAddress: true,
-	TypeScale: true, TypeSignature: true, TypeInfo: true, TypeHeading: true, TypeDivider: true,
+	TypeScale: true, TypeSignature: true, TypeLiveness: true, TypeInfo: true, TypeHeading: true, TypeDivider: true,
 	TypeSpacer: true,
 }
 
@@ -74,7 +77,7 @@ func (t FieldType) HasAnswer() bool { return !t.IsDisplay() }
 // Conditionable reports whether other fields may depend on a field of this type.
 func (t FieldType) Conditionable() bool {
 	switch t {
-	case TypeRepeater, TypeFile, TypeAddress, TypeSignature:
+	case TypeRepeater, TypeFile, TypeAddress, TypeSignature, TypeLiveness:
 		return false
 	}
 	return !t.IsDisplay()
@@ -245,6 +248,10 @@ func (v *validator) field(p string, f Field, nested bool) {
 		lo, hi := scaleRange(f)
 		if lo != math.Trunc(lo) || hi != math.Trunc(hi) || lo < 0 || hi > 10 || lo >= hi {
 			v.add(p+".min", "La escala va de un entero a otro mayor, entre 0 y 10")
+		}
+	case TypeLiveness:
+		if nested {
+			v.add(p+".type", "Un grupo repetible no puede contener una verificación de vida")
 		}
 	case TypeInfo, TypeHeading, TypeDivider, TypeSpacer:
 		if nested {

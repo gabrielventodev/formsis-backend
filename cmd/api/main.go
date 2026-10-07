@@ -16,6 +16,7 @@ import (
 	"github.com/gabrielventodev/formflow/api/internal/branding"
 	"github.com/gabrielventodev/formflow/api/internal/config"
 	"github.com/gabrielventodev/formflow/api/internal/db"
+	"github.com/gabrielventodev/formflow/api/internal/face"
 	"github.com/gabrielventodev/formflow/api/internal/forms"
 	"github.com/gabrielventodev/formflow/api/internal/httpapi"
 	"github.com/gabrielventodev/formflow/api/internal/mailer"
@@ -86,6 +87,10 @@ func run() error {
 		DB: pool, Store: store, Mail: mail,
 		WebURL: cfg.WebPublicURL, MaxUploadMB: cfg.MaxUploadMB, OrgID: orgID,
 		Webhooks: hooks,
+		Face:     face.New(cfg.FaceURL, cfg.FaceToken),
+	}
+	if portalHandler.Face == nil {
+		slog.Warn("FACE_URL is not set: liveness fields are unavailable")
 	}
 
 	srv := &http.Server{

@@ -27,6 +27,7 @@ func (s *Server) adminRoutes(r chi.Router) {
 	r.Post("/submissions/{id}/comments/{commentID}/resolve", s.resolveComment)
 	r.Put("/submissions/{id}/assignee", s.assignSubmission)
 	r.Get("/submissions/{id}/files/{fileID}", s.downloadFile)
+	r.Get("/submissions/{id}/liveness/{checkID}/frames/{n}", s.livenessFrame)
 }
 
 type userRef struct {
@@ -355,6 +356,14 @@ func (s *Server) getSubmission(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	liveness, err := s.loadLiveness(ctx, sr.ID)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if liveness == nil {
+		liveness = []livenessRow{}
+	}
 
 	events := []eventRow{}
 	rows, err = s.DB.Query(ctx, `
@@ -390,6 +399,7 @@ func (s *Server) getSubmission(w http.ResponseWriter, r *http.Request) {
 		"data":                data,
 		"schema":              schema,
 		"files":               files,
+		"liveness":            liveness,
 		"comments":            comments,
 		"events":              events,
 		"allowed_transitions": allowedTransitions(sr.Status, id.Role),

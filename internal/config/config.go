@@ -30,6 +30,11 @@ type Config struct {
 	// WebhooksAllowInsecure lets webhook endpoints use plain HTTP and private
 	// or local addresses. Only for development.
 	WebhooksAllowInsecure bool
+
+	// FaceURL is the internal address of the formsis-face service (empty = liveness
+	// fields are unavailable); FaceToken is the bearer token it expects.
+	FaceURL   string
+	FaceToken string
 }
 
 func Load() Config {
@@ -65,6 +70,9 @@ func Load() Config {
 		CookieSecure:  os.Getenv("COOKIE_SECURE") == "true",
 
 		WebhooksAllowInsecure: os.Getenv("WEBHOOKS_ALLOW_INSECURE") == "true",
+
+		FaceURL:   os.Getenv("FACE_URL"),
+		FaceToken: os.Getenv("FACE_TOKEN"),
 	}
 }
 

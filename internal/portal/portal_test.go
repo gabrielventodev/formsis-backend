@@ -45,6 +45,12 @@ func (m *memMail) Send(_ context.Context, msg mailer.Message) error {
 // setup needs TEST_DATABASE_URL pointing at a throwaway database.
 func setup(t *testing.T) (*httptest.Server, *pgxpool.Pool, string) {
 	t.Helper()
+	return setupWith(t, testSchema, nil)
+}
+
+// setupWith publishes formSchema and lets the test adjust the handler before it serves.
+func setupWith(t *testing.T, formSchema string, configure func(*Handler)) (*httptest.Server, *pgxpool.Pool, string) {
+	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("TEST_DATABASE_URL not set")
@@ -66,7 +72,7 @@ func setup(t *testing.T) (*httptest.Server, *pgxpool.Pool, string) {
 	slug := "t-" + strings.ReplaceAll(t.Name(), "/", "-")
 	must(t, pool.QueryRow(ctx, `INSERT INTO organizations (name, slug) VALUES ('T', $1 || gen_random_uuid()) RETURNING id`, slug).Scan(&orgID))
 	must(t, pool.QueryRow(ctx, `INSERT INTO forms (organization_id, title, status) VALUES ($1, 'Test', 'published') RETURNING id`, orgID).Scan(&formID))
-	must(t, pool.QueryRow(ctx, `INSERT INTO form_versions (form_id, version_number, schema) VALUES ($1, 1, $2) RETURNING id`, formID, testSchema).Scan(&versionID))
+	must(t, pool.QueryRow(ctx, `INSERT INTO form_versions (form_id, version_number, schema) VALUES ($1, 1, $2) RETURNING id`, formID, formSchema).Scan(&versionID))
 	_, err = pool.Exec(ctx, `UPDATE forms SET current_version_id = $2 WHERE id = $1`, formID, versionID)
 	must(t, err)
 	link := "link-" + orgID
@@ -74,6 +80,9 @@ func setup(t *testing.T) (*httptest.Server, *pgxpool.Pool, string) {
 	must(t, err)
 
 	h := &Handler{DB: pool, Store: store, Mail: &memMail{}, WebURL: "http://web", MaxUploadMB: 5, OrgID: orgID}
+	if configure != nil {
+		configure(h)
+	}
 	mux := http.NewServeMux()
 	mux.Handle("/admin/links/", http.StripPrefix("/admin/links", h.AdminRoutes()))
 	mux.Handle("/", h.Routes())

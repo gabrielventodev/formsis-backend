@@ -103,3 +103,30 @@ func TestValidateProblems(t *testing.T) {
 		})
 	}
 }
+
+func TestLivenessField(t *testing.T) {
+	s, err := Parse([]byte(`{"sections":[{"key":"a","title":"A","fields":[
+	  {"key":"vida","type":"liveness","label":"Verifica que eres tú","required":true},
+	  {"key":"grupo","type":"repeater","label":"Grupo","fields":[{"key":"v","type":"liveness","label":"V"}]},
+	  {"key":"x","type":"text","label":"X","showIf":{"field":"vida","op":"notEmpty"}}
+	]}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	probs := Validate(s)
+	if len(probs) != 2 || probs[0].Path != "sections[0].fields[1].fields[0].type" || probs[1].Path != "sections[0].fields[2].showIf.field" {
+		t.Fatalf("problems: %+v", probs)
+	}
+
+	s.Sections[0].Fields = s.Sections[0].Fields[:1]
+	if errs := s.ValidateAnswers(map[string]any{}, FileCounts{}); errs["vida"] == "" {
+		t.Fatal("a required liveness field needs a completed check")
+	}
+	if errs := s.ValidateAnswers(map[string]any{}, FileCounts{"vida": 1}); len(errs) != 0 {
+		t.Fatalf("completed check: %v", errs)
+	}
+	// Whatever the browser sends for the field is not stored as an answer.
+	if out := s.Clean(map[string]any{"vida": "ok"}); len(out) != 0 {
+		t.Fatalf("clean: %v", out)
+	}
+}

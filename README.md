@@ -70,6 +70,8 @@ Este repositorio es el backend publicado aparte para llevarle seguimiento. Su hi
 | `ADMIN_NAME` | `Administrador` | Nombre de esa cuenta |
 | `ORG_NAME` | `Mi organización` | Nombre de la organización |
 | `COOKIE_SECURE` | `false` | `true` detrás de HTTPS para marcar la cookie de sesión como Secure |
+| `FACE_URL` | (vacío) | Dirección interna del servicio de prueba de vida ([formsis-face](https://github.com/gabrielventodev/formsis-face)), p. ej. `http://face:8000`. Sin ella, los campos de prueba de vida responden 503 |
+| `FACE_TOKEN` | (vacío) | Token que el servicio face espera en `Authorization: Bearer` |
 | `WEBHOOKS_ALLOW_INSECURE` | `false` | Solo desarrollo: permite webhooks a `http://` y a direcciones privadas o locales |
 
 ## Migraciones
@@ -113,6 +115,15 @@ Cada formulario puede tener hasta 5 pasos de aprobación en orden (por ejemplo C
 `GET/PUT /api/v1/admin/organization` (owners y admins) cambia el nombre, el color principal y el email de contacto; `POST/DELETE /api/v1/admin/organization/logo` sube o quita el logo (PNG, JPG o WebP, hasta 1 MB; SVG no se acepta porque puede llevar scripts). El color debe tener contraste AA (4,5:1) con texto blanco, porque es el fondo de los botones.
 
 El portal lo lee sin sesión desde `GET /api/v1/branding` y `GET /api/v1/branding/logo`. Todos los correos salen además en HTML con el color, el logo y el email de contacto (`mailer.Branded`); la versión de texto plano se mantiene.
+
+## Prueba de vida
+
+Campo `liveness` ("Prueba de vida"): el solicitante abre su cámara y sigue un desafío al azar (mirar de frente y dos de: girar a su izquierda, a su derecha, acercarse). El portal toma 3 fotogramas por paso y los manda juntos; el servicio [formsis-face](https://github.com/gabrielventodev/formsis-face) decide `pass`, `review`, `retry` o `fail`.
+
+- `POST /api/v1/portal/submission/liveness` `{fieldKey}` → desafío (`steps`, `stepMs`, `framesPerStep`, `expiresAt`, `attemptsLeft`). Vence a los 90 s.
+- `POST /api/v1/portal/submission/liveness/{id}` multipart `frames` (JPEG/PNG, máx. 20 de 1,5 MB) + `frameSteps` (JSON con el paso de cada fotograma).
+- 5 intentos por campo; se renuevan si el revisor pide correcciones. `pass` y `review` completan el campo.
+- Cada intento queda en `liveness_checks` con sus fotogramas en el almacenamiento y la respuesta completa del servicio. El revisor los ve en el detalle del envío (`GET /api/v1/admin/submissions/{id}/liveness/{checkID}/frames/{n}`).
 
 ## Webhooks salientes
 
