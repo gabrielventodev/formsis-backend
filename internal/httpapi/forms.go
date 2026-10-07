@@ -30,6 +30,8 @@ func (s *Server) formRoutes(r chi.Router) {
 		r.Get("/validate", s.validateForm)
 		r.Get("/versions", s.listVersions)
 		r.Get("/versions/{number}", s.getVersion)
+		r.Get("/approval-flow", s.getApprovalFlow)
+		r.Put("/approval-flow", s.putApprovalFlow)
 	})
 }
 
