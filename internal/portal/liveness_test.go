@@ -78,6 +78,11 @@ func livenessSetup(t *testing.T, ff *fakeFace) (*httptest.Server, *pgxpool.Pool,
 
 func sendFrames(t *testing.T, srv *httptest.Server, token, checkID string, frameSteps []int, frame []byte) (int, map[string]any) {
 	t.Helper()
+	return postFrames(t, srv, "/submission/liveness/"+checkID, token, frameSteps, frame)
+}
+
+func postFrames(t *testing.T, srv *httptest.Server, path, token string, frameSteps []int, frame []byte) (int, map[string]any) {
+	t.Helper()
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	fs, _ := json.Marshal(frameSteps)
@@ -90,7 +95,7 @@ func sendFrames(t *testing.T, srv *httptest.Server, token, checkID string, frame
 		_, _ = w.Write(frame)
 	}
 	mw.Close()
-	req, _ := http.NewRequest("POST", srv.URL+"/submission/liveness/"+checkID, &buf)
+	req, _ := http.NewRequest("POST", srv.URL+path, &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+token)
 	res, err := http.DefaultClient.Do(req)

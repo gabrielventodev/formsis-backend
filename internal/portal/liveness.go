@@ -97,7 +97,11 @@ func (h *Handler) startLiveness(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	s := current(r)
 	var req livenessStartRequest
-	if err := decode(r, &req, 1<<12); err != nil {
+	// From a phone, the handoff fixes the field.
+	ho := currentHandoff(r)
+	if ho != nil {
+		req.FieldKey = ho.FieldKey
+	} else if err := decode(r, &req, 1<<12); err != nil {
 		writeError(w, http.StatusBadRequest, "Solicitud no válida.")
 		return
 	}
@@ -123,9 +127,9 @@ func (h *Handler) startLiveness(w http.ResponseWriter, r *http.Request) {
 	var id string
 	var expiresAt time.Time
 	if err := h.DB.QueryRow(ctx, `
-		INSERT INTO liveness_checks (submission_id, field_key, steps, expires_at)
-		VALUES ($1, $2, $3, now() + $4::interval)
-		RETURNING id, expires_at`, s.ID, req.FieldKey, steps, fmt.Sprintf("%d seconds", int(livenessTTL.Seconds()))).
+		INSERT INTO liveness_checks (submission_id, field_key, steps, expires_at, handoff_id)
+		VALUES ($1, $2, $3, now() + $4::interval, $5)
+		RETURNING id, expires_at`, s.ID, req.FieldKey, steps, fmt.Sprintf("%d seconds", int(livenessTTL.Seconds())), ho.id()).
 		Scan(&id, &expiresAt); err != nil {
 		serverError(w, r, err)
 		return
@@ -143,6 +147,7 @@ func (h *Handler) startLiveness(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) finishLiveness(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	s := current(r)
+	ho := currentHandoff(r)
 	checkID := chi.URLParam(r, "id")
 
 	r.Body = http.MaxBytesReader(w, r.Body, int64(livenessMaxFrames*livenessMaxFrameMB*(1<<20))+1<<20)
@@ -157,7 +162,8 @@ func (h *Handler) finishLiveness(w http.ResponseWriter, r *http.Request) {
 	var expiresAt time.Time
 	err := h.DB.QueryRow(ctx, `
 		SELECT field_key, steps, expires_at FROM liveness_checks
-		WHERE id = $1 AND submission_id = $2 AND decision IS NULL`, checkID, s.ID).Scan(&fieldKey, &steps, &expiresAt)
+		WHERE id = $1 AND submission_id = $2 AND decision IS NULL
+		  AND ($3::uuid IS NULL OR handoff_id = $3)`, checkID, s.ID, ho.id()).Scan(&fieldKey, &steps, &expiresAt)
 	if errors.Is(err, pgx.ErrNoRows) || isInvalidUUID(err) {
 		writeError(w, http.StatusNotFound, "Este intento ya terminó. Empieza uno nuevo.")
 		return
@@ -225,8 +231,14 @@ func (h *Handler) finishLiveness(w http.ResponseWriter, r *http.Request) {
 			WHERE id = $1`, checkID, decision, reasons, raw, stored, res.BestFrame); err != nil {
 			return err
 		}
+		// A phone link is single-use once the field is done.
+		if ho != nil && face.Completed(decision) {
+			if _, err := tx.Exec(ctx, `UPDATE liveness_handoffs SET expires_at = least(expires_at, now()) WHERE id = $1`, ho.ID); err != nil {
+				return err
+			}
+		}
 		return audit(ctx, tx, s.ID, s.Email, "liveness.completed", nil, nil, map[string]any{
-			"check_id": checkID, "field_key": fieldKey, "decision": decision, "reasons": reasons,
+			"check_id": checkID, "field_key": fieldKey, "decision": decision, "reasons": reasons, "from_phone": ho != nil,
 		})
 	})
 	if err != nil {

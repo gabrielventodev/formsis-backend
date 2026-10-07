@@ -63,6 +63,16 @@ func (h *Handler) Routes() http.Handler {
 		r.Delete("/submission/files/{id}", h.deleteFile)
 		r.Post("/submission/liveness", h.startLiveness)
 		r.Post("/submission/liveness/{id}", h.finishLiveness)
+		r.Post("/submission/liveness/handoff", h.createHandoff)
+		r.Get("/submission/liveness/handoff/{id}", h.handoffStatus)
+	})
+
+	// The phone side of a liveness handoff (see handoff.go).
+	r.Group(func(r chi.Router) {
+		r.Use(h.handoffAuth)
+		r.Get("/handoff", h.getHandoff)
+		r.Post("/handoff/liveness", h.startLiveness)
+		r.Post("/handoff/liveness/{id}", h.finishLiveness)
 	})
 	return r
 }

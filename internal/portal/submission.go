@@ -59,18 +59,22 @@ type queryer interface {
 }
 
 func (h *Handler) loadSubmission(ctx context.Context, q queryer, tokenHash string, forUpdate bool) (*submission, error) {
+	return h.loadSubmissionWhere(ctx, q, "s.access_token_hash = $1", tokenHash, forUpdate)
+}
+
+func (h *Handler) loadSubmissionWhere(ctx context.Context, q queryer, where string, arg any, forUpdate bool) (*submission, error) {
 	sql := `
 		SELECT s.id, s.organization_id, f.title, f.description, s.applicant_email, s.applicant_name,
 		       s.status, s.data, v.schema, s.submitted_at, s.updated_at
 		FROM submissions s
 		JOIN forms f ON f.id = s.form_id
 		JOIN form_versions v ON v.id = s.form_version_id
-		WHERE s.access_token_hash = $1`
+		WHERE ` + where
 	if forUpdate {
 		sql += " FOR UPDATE OF s"
 	}
 	var s submission
-	err := q.QueryRow(ctx, sql, tokenHash).Scan(&s.ID, &s.OrgID, &s.FormTitle, &s.FormDesc, &s.Email, &s.Name,
+	err := q.QueryRow(ctx, sql, arg).Scan(&s.ID, &s.OrgID, &s.FormTitle, &s.FormDesc, &s.Email, &s.Name,
 		&s.Status, &s.Data, &s.RawSchema, &s.SubmittedAt, &s.UpdatedAt)
 	if err != nil {
 		return nil, err

@@ -29,6 +29,8 @@ type livenessRow struct {
 	BestFrame   *int            `json:"best_frame"`
 	CreatedAt   time.Time       `json:"created_at"`
 	CompletedAt *time.Time      `json:"completed_at"`
+	// Taken on a phone through the QR shown on a computer.
+	FromPhone bool `json:"from_phone"`
 }
 
 type storedFrame struct {
@@ -40,7 +42,8 @@ type storedFrame struct {
 // loadLiveness returns every finished attempt of a submission, oldest first.
 func (s *Server) loadLiveness(ctx context.Context, submissionID string) ([]livenessRow, error) {
 	rows, err := s.DB.Query(ctx, `
-		SELECT id, field_key, steps, decision, reasons, result, frames, best_frame, created_at, completed_at
+		SELECT id, field_key, steps, decision, reasons, result, frames, best_frame, created_at, completed_at,
+		       handoff_id IS NOT NULL
 		FROM liveness_checks WHERE submission_id = $1 AND decision IS NOT NULL ORDER BY created_at`, submissionID)
 	if err != nil {
 		return nil, err
@@ -49,7 +52,7 @@ func (s *Server) loadLiveness(ctx context.Context, submissionID string) ([]liven
 		var l livenessRow
 		var frames []storedFrame
 		if err := row.Scan(&l.ID, &l.FieldKey, &l.Steps, &l.Decision, &l.Reasons, &l.Result, &frames,
-			&l.BestFrame, &l.CreatedAt, &l.CompletedAt); err != nil {
+			&l.BestFrame, &l.CreatedAt, &l.CompletedAt, &l.FromPhone); err != nil {
 			return l, err
 		}
 		l.FrameSteps = make([]int, len(frames))

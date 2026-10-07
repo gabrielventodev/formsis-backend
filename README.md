@@ -125,6 +125,12 @@ Campo `liveness` ("Prueba de vida"): el solicitante abre su cámara y sigue un d
 - 5 intentos por campo; se renuevan si el revisor pide correcciones. `pass` y `review` completan el campo.
 - Cada intento queda en `liveness_checks` con sus fotogramas en el almacenamiento y la respuesta completa del servicio. El revisor los ve en el detalle del envío (`GET /api/v1/admin/submissions/{id}/liveness/{checkID}/frames/{n}`).
 
+Desde un computador, el portal muestra un QR para hacer la verificación con el celular:
+
+- `POST /api/v1/portal/submission/liveness/handoff` `{fieldKey}` → `{id, url, expiresAt}`. `url` es `WEB_PUBLIC_URL/v/{token}`; vence a los 10 min y crear otro cierra el anterior.
+- `GET /api/v1/portal/submission/liveness/handoff/{id}` → `openedAt`, `checking`, `attempts`, `attemptsLeft`, `expired`. El computador lo consulta cada 2 s.
+- El celular usa el token del QR (`Authorization: Bearer`) en `GET /api/v1/portal/handoff` y en `POST /api/v1/portal/handoff/liveness[/{id}]`, que funcionan igual que las de arriba pero solo para ese campo. El token no abre nada más del envío y deja de servir cuando el campo queda completo.
+
 ## Webhooks salientes
 
 Owners y admins registran hasta 10 endpoints en `/api/v1/admin/webhooks`. Cada uno recibe un `POST` JSON cuando un envío cambia de estado:
