@@ -326,3 +326,17 @@ func TestPasswordHash(t *testing.T) {
 		t.Fatal("password verification mismatch")
 	}
 }
+
+func TestLoginLockoutPerEmail(t *testing.T) {
+	srv, pool, _ := adminTestServer(t)
+	email, _, _ := seed(t, pool)
+	c := newClient(t, srv.URL)
+	for i := 0; i < 10; i++ {
+		if code, _ := c.do("POST", "/api/v1/auth/login", map[string]string{"email": email, "password": "mala"}); code != http.StatusUnauthorized {
+			t.Fatalf("failed login %d: got %d", i, code)
+		}
+	}
+	if code, _ := c.do("POST", "/api/v1/auth/login", map[string]string{"email": email, "password": "secreto-123"}); code != http.StatusTooManyRequests {
+		t.Fatalf("login after 10 failures: got %d, want 429", code)
+	}
+}

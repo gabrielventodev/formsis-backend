@@ -18,10 +18,12 @@ import (
 	"net/http"
 	"net/mail"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gabrielventodev/formsis/api/internal/face"
 	"github.com/gabrielventodev/formsis/api/internal/mailer"
+	"github.com/gabrielventodev/formsis/api/internal/ratelimit"
 	"github.com/gabrielventodev/formsis/api/internal/storage"
 	"github.com/gabrielventodev/formsis/api/internal/webhooks"
 	"github.com/go-chi/chi/v5"
@@ -44,7 +46,33 @@ type Handler struct {
 	Webhooks *webhooks.Worker
 	// Face checks liveness fields (nil = liveness fields answer 503).
 	Face *face.Client
+
+	limitsOnce sync.Once
+	limitsVal  portalLimits
 }
+
+// portalLimits keep the endpoints that send emails from being used to spam addresses
+// or to create drafts without end.
+type portalLimits struct {
+	startIP     *ratelimit.Limiter
+	startEmail  *ratelimit.Limiter
+	resumeIP    *ratelimit.Limiter
+	resumeEmail *ratelimit.Limiter
+}
+
+func (h *Handler) limits() *portalLimits {
+	h.limitsOnce.Do(func() {
+		h.limitsVal = portalLimits{
+			startIP:     ratelimit.New(20, time.Hour),
+			startEmail:  ratelimit.New(5, time.Hour),
+			resumeIP:    ratelimit.New(10, time.Hour),
+			resumeEmail: ratelimit.New(3, time.Hour),
+		}
+	})
+	return &h.limitsVal
+}
+
+const tooManyAttempts = "Demasiados intentos. Espera un rato y vuelve a intentar."
 
 func (h *Handler) Routes() http.Handler {
 	r := chi.NewRouter()
@@ -182,6 +210,10 @@ func (h *Handler) start(w http.ResponseWriter, r *http.Request) {
 	if len(req.Name) > 200 {
 		req.Name = req.Name[:200]
 	}
+	if !h.limits().startIP.Allow(ratelimit.ClientIP(r)) || !h.limits().startEmail.Allow(strings.ToLower(req.Email)) {
+		writeError(w, http.StatusTooManyRequests, tooManyAttempts)
+		return
+	}
 
 	token, hash := newToken()
 	var subID string
@@ -235,6 +267,10 @@ func (h *Handler) resume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	email := strings.TrimSpace(req.Email)
+	if !h.limits().resumeIP.Allow(ratelimit.ClientIP(r)) || !h.limits().resumeEmail.Allow(strings.ToLower(email)) {
+		writeError(w, http.StatusTooManyRequests, tooManyAttempts)
+		return
+	}
 	rows, err := h.DB.Query(ctx, `
 		SELECT s.id, f.title FROM submissions s JOIN forms f ON f.id = s.form_id
 		WHERE lower(s.applicant_email) = lower($1) AND s.status IN ('draft', 'changes_requested')
