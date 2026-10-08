@@ -23,6 +23,12 @@ var inlineTypes = map[string]bool{
 	"application/pdf": true, "image/png": true, "image/jpeg": true, "image/gif": true, "image/webp": true,
 }
 
+// Caps per submission, so an anonymous applicant can't fill the storage.
+const (
+	maxFilesPerSubmission = 50
+	maxBytesPerSubmission = 300 << 20
+)
+
 func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	s := current(r)
@@ -95,7 +101,21 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var out fileOut
+	errQuota := errors.New("quota")
 	err = pgx.BeginFunc(ctx, h.DB, func(tx pgx.Tx) error {
+		// Lock the submission so parallel uploads can't both slip under the caps.
+		if _, err := tx.Exec(ctx, `SELECT 1 FROM submissions WHERE id = $1 FOR UPDATE`, s.ID); err != nil {
+			return err
+		}
+		var files int
+		var bytes int64
+		if err := tx.QueryRow(ctx, `SELECT count(*), coalesce(sum(size_bytes), 0) FROM submission_files WHERE submission_id = $1`, s.ID).
+			Scan(&files, &bytes); err != nil {
+			return err
+		}
+		if files >= maxFilesPerSubmission || bytes+header.Size > maxBytesPerSubmission {
+			return errQuota
+		}
 		var id string
 		if err := tx.QueryRow(ctx, `SELECT gen_random_uuid()`).Scan(&id); err != nil {
 			return err
@@ -116,6 +136,10 @@ func (h *Handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 		// Upload last: if it fails the row is rolled back; if the commit fails we only leave an orphan object.
 		return h.Store.Put(ctx, key, file, header.Size, mimeType)
 	})
+	if errors.Is(err, errQuota) {
+		writeError(w, http.StatusRequestEntityTooLarge, fmt.Sprintf("Alcanzaste el máximo de archivos de esta solicitud (%d archivos o %d MB en total). Elimina alguno para subir otro.", maxFilesPerSubmission, maxBytesPerSubmission>>20))
+		return
+	}
 	if err != nil {
 		serverError(w, r, err)
 		return

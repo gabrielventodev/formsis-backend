@@ -62,7 +62,7 @@ Este repositorio es el backend publicado aparte para llevarle seguimiento. Su hi
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | vacío | Credenciales S3 |
 | `S3_REGION` | `us-east-1` | Región S3 |
 | `S3_USE_SSL` | `false` | `true` si el endpoint usa HTTPS |
-| `SMTP_HOST` | vacío | Servidor SMTP; vacío desactiva el envío de correos |
+| `SMTP_HOST` | vacío | Servidor SMTP; vacío escribe los correos en el log (solo para desarrollo: con `COOKIE_SECURE=true` la API no arranca sin SMTP) |
 | `SMTP_PORT` | `587` | Puerto SMTP |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | vacío | Credenciales SMTP |
 | `MAIL_FROM` | `Formsis <no-reply@localhost>` | Remitente de los correos |

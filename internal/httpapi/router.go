@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/gabrielventodev/formsis/api/internal/mailer"
+	"github.com/gabrielventodev/formsis/api/internal/ratelimit"
 	"github.com/gabrielventodev/formsis/api/internal/storage"
 	"github.com/gabrielventodev/formsis/api/internal/webhooks"
 	"github.com/go-chi/chi/v5"
@@ -26,11 +28,33 @@ type Server struct {
 	WebURL       string           // public web URL used in applicant links
 	Uploads      storage.Store    // stores the organization logo (nil = logo uploads disabled)
 	Webhooks     *webhooks.Worker // sends queued webhook deliveries (nil = queued only)
+
+	limitsOnce sync.Once
+	limitsVal  authLimits
+}
+
+// authLimits slow down password guessing and email floods on the public auth endpoints.
+type authLimits struct {
+	loginIP    *ratelimit.Limiter // every login attempt, per client IP
+	loginEmail *ratelimit.Limiter // failed logins, per email
+	forgotIP   *ratelimit.Limiter // reset requests, per client IP
+}
+
+func (s *Server) limits() *authLimits {
+	s.limitsOnce.Do(func() {
+		s.limitsVal = authLimits{
+			loginIP:    ratelimit.New(20, 15*time.Minute),
+			loginEmail: ratelimit.New(10, 15*time.Minute),
+			forgotIP:   ratelimit.New(5, 15*time.Minute),
+		}
+	})
+	return &s.limitsVal
 }
 
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
-	r.Use(middleware.RequestID, middleware.RealIP, middleware.Logger, middleware.Recoverer)
+	// ratelimit.RealIP trusts X-Forwarded-For only from the proxies in front (private addresses).
+	r.Use(middleware.RequestID, ratelimit.RealIP, middleware.Logger, middleware.Recoverer)
 	r.Use(middleware.Timeout(30 * time.Second))
 	r.Use(s.cors)
 

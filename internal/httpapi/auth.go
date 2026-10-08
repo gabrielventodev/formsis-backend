@@ -5,9 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gabrielventodev/formsis/api/internal/auth"
+	"github.com/gabrielventodev/formsis/api/internal/ratelimit"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jackc/pgx/v5"
 )
@@ -23,8 +25,14 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Ingresa email y contraseña", nil)
 		return
 	}
+	emailKey := strings.ToLower(strings.TrimSpace(in.Email))
+	if !s.limits().loginIP.Allow(ratelimit.ClientIP(r)) || s.limits().loginEmail.Blocked(emailKey) {
+		writeError(w, http.StatusTooManyRequests, "Demasiados intentos. Espera unos minutos y vuelve a intentar.", nil)
+		return
+	}
 	token, id, err := s.authStore().Login(r.Context(), in.Email, in.Password)
 	if errors.Is(err, auth.ErrInvalidCredentials) || errors.Is(err, pgx.ErrNoRows) {
+		s.limits().loginEmail.Hit(emailKey)
 		writeError(w, http.StatusUnauthorized, "Email o contraseña incorrectos", nil)
 		return
 	}

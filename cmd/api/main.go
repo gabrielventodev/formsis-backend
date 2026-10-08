@@ -34,6 +34,11 @@ func main() {
 
 func run() error {
 	cfg := config.Load()
+	// Without SMTP the mailer writes emails, magic links included, to the log.
+	// That is handy in development but leaks access links in production.
+	if cfg.CookieSecure && cfg.Mail.Host == "" {
+		return errors.New("SMTP_HOST is required in production (COOKIE_SECURE=true): without it, emails and their access links would be written to the log")
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 

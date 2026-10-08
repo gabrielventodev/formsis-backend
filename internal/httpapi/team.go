@@ -13,6 +13,7 @@ import (
 
 	"github.com/gabrielventodev/formsis/api/internal/auth"
 	"github.com/gabrielventodev/formsis/api/internal/mailer"
+	"github.com/gabrielventodev/formsis/api/internal/ratelimit"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
 )
@@ -438,6 +439,10 @@ func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<16)).Decode(&in); err != nil || strings.TrimSpace(in.Email) == "" {
 		writeError(w, http.StatusBadRequest, "Ingresa tu email", nil)
+		return
+	}
+	if !s.limits().forgotIP.Allow(ratelimit.ClientIP(r)) {
+		writeError(w, http.StatusTooManyRequests, "Demasiados intentos. Espera unos minutos y vuelve a intentar.", nil)
 		return
 	}
 	ctx := r.Context()

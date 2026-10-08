@@ -185,6 +185,9 @@ func (s *Store) EnsureAdmin(ctx context.Context, email, password, name, orgName 
 	if exists {
 		return false, nil
 	}
+	if err := CheckPassword(password); err != nil {
+		return false, fmt.Errorf("ADMIN_PASSWORD: %w", err)
+	}
 
 	var orgID string
 	err = tx.QueryRow(ctx, `SELECT id FROM organizations ORDER BY created_at LIMIT 1`).Scan(&orgID)
