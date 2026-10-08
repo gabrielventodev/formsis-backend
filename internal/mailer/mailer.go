@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"mime"
+	"net/mail"
 	"net/smtp"
 	"strings"
 	"time"
@@ -55,8 +56,12 @@ func (s *SMTP) Send(_ context.Context, m Message) error {
 	if strings.ContainsAny(m.To, "\r\n") {
 		return fmt.Errorf("mailer: invalid recipient")
 	}
+	header, envelope, err := sender(s.cfg.From)
+	if err != nil {
+		return err
+	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "From: %s\r\n", s.cfg.From)
+	fmt.Fprintf(&b, "From: %s\r\n", header)
 	fmt.Fprintf(&b, "To: %s\r\n", m.To)
 	fmt.Fprintf(&b, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", m.Subject))
 	fmt.Fprintf(&b, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
@@ -72,5 +77,15 @@ func (s *SMTP) Send(_ context.Context, m Message) error {
 		fmt.Fprintf(&b, "--%s\r\nContent-Type: text/html; charset=utf-8\r\nContent-Transfer-Encoding: 8bit\r\n\r\n%s\r\n", boundary, crlf(m.HTML))
 		fmt.Fprintf(&b, "--%s--\r\n", boundary)
 	}
-	return smtp.SendMail(s.cfg.Host+":"+s.cfg.Port, auth, s.cfg.From, []string{m.To}, []byte(b.String()))
+	return smtp.SendMail(s.cfg.Host+":"+s.cfg.Port, auth, envelope, []string{m.To}, []byte(b.String()))
+}
+
+// sender splits MAIL_FROM ("Formsis <no-reply@x.com>" or a bare address) into the
+// From header and the bare address SMTP expects in MAIL FROM.
+func sender(from string) (header, envelope string, err error) {
+	a, err := mail.ParseAddress(from)
+	if err != nil {
+		return "", "", fmt.Errorf("mailer: invalid MAIL_FROM %q: %w", from, err)
+	}
+	return a.String(), a.Address, nil
 }
