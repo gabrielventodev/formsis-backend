@@ -122,6 +122,7 @@ func seed(t *testing.T, pool *pgxpool.Pool) (email, subID, fileID string) {
 	schema := `{"sections":[{"key":"empresa","title":"Empresa","fields":[
 		{"key":"razon_social","type":"text","label":"Razón social"},
 		{"key":"socios","type":"repeater","label":"Socios","fields":[{"key":"nombre","type":"text","label":"Nombre"}]},
+		{"key":"docs","type":"heading","label":"Documentos"},
 		{"key":"estatutos","type":"file","label":"Estatutos"}]}]}`
 	must(pool.QueryRow(ctx, `INSERT INTO form_versions (form_id, version_number, schema) VALUES ($1, 1, $2) RETURNING id`, formID, schema).Scan(&versionID))
 	must(pool.QueryRow(ctx, `
@@ -200,6 +201,15 @@ func TestAdminReviewFlow(t *testing.T) {
 	// Stale UI: the client thinks it is still "submitted".
 	if code, _ := c.do("POST", "/api/v1/admin/submissions/"+subID+"/transition", map[string]string{"to": "approved", "from": "submitted"}); code != http.StatusConflict {
 		t.Fatalf("stale transition: %d", code)
+	}
+	// Display blocks collect no answer, so they cannot be flagged for correction.
+	if code, _ := c.do("POST", "/api/v1/admin/submissions/"+subID+"/transition", map[string]any{
+		"to": "changes_requested", "field_comments": []fieldComment{{FieldKey: "docs", Body: "Corrige el título"}},
+	}); code != http.StatusBadRequest {
+		t.Fatalf("changes on a display block: %d", code)
+	}
+	if code, _ := c.do("POST", "/api/v1/admin/submissions/"+subID+"/comments", map[string]string{"body": "Ojo", "field_key": "docs"}); code != http.StatusBadRequest {
+		t.Fatalf("comment on a display block: %d", code)
 	}
 	code, body = c.do("POST", "/api/v1/admin/submissions/"+subID+"/transition", map[string]any{
 		"to": "changes_requested", "comment": "Faltan documentos",

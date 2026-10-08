@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gabrielventodev/formsis/api/internal/auth"
+	"github.com/gabrielventodev/formsis/api/internal/schema"
 	"github.com/gabrielventodev/formsis/api/internal/webhooks"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5"
@@ -465,6 +466,29 @@ type fieldComment struct {
 	Body     string `json:"body"`
 }
 
+const errDisplayComment = "Los bloques de diseño (título, texto, separador o espacio) no se llenan, así que no se pueden observar"
+
+// observesDisplayBlock reports whether any of the keys points at a display
+// block of the submission's form version, which collects no answer to correct.
+func observesDisplayBlock(ctx context.Context, tx pgx.Tx, subID string, keys []string) (bool, error) {
+	var raw json.RawMessage
+	if err := tx.QueryRow(ctx, `
+		SELECT v.schema FROM submissions s JOIN form_versions v ON v.id = s.form_version_id
+		WHERE s.id = $1`, subID).Scan(&raw); err != nil {
+		return false, err
+	}
+	sc, err := schema.Parse(raw)
+	if err != nil {
+		return false, err
+	}
+	for _, k := range keys {
+		if f := sc.Find(k); f != nil && f.Type.IsDisplay() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 	id, _ := auth.FromContext(r.Context())
 	var in struct {
@@ -524,6 +548,21 @@ func (s *Server) transitionSubmission(w http.ResponseWriter, r *http.Request) {
 	if in.From != "" && in.From != from {
 		writeError(w, http.StatusConflict, "El envío cambió de estado mientras lo revisabas; recarga la página", nil)
 		return
+	}
+	if len(fieldComments) > 0 {
+		keys := make([]string, len(fieldComments))
+		for i, fc := range fieldComments {
+			keys[i] = fc.FieldKey
+		}
+		display, err := observesDisplayBlock(ctx, tx, subID, keys)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		if display {
+			writeError(w, http.StatusBadRequest, errDisplayComment, nil)
+			return
+		}
 	}
 	allowed := false
 	for _, to := range allowedTransitions(from, id.Role) {
@@ -688,6 +727,29 @@ func (s *Server) addComment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(ctx)
+
+	if fieldKey != nil {
+		var subID string
+		err := tx.QueryRow(ctx, `SELECT id FROM submissions WHERE id::text = $1 AND organization_id = $2`,
+			chi.URLParam(r, "id"), id.OrgID).Scan(&subID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "Envío no encontrado", nil)
+			return
+		}
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		display, err := observesDisplayBlock(ctx, tx, subID, []string{*fieldKey})
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		if display {
+			writeError(w, http.StatusBadRequest, errDisplayComment, nil)
+			return
+		}
+	}
 
 	var commentID, subID string
 	err = tx.QueryRow(ctx, `
