@@ -22,7 +22,6 @@ type FileCounts map[string]int
 
 var (
 	emailRe = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
-	phoneRe = regexp.MustCompile(`^\+?[\d\s()-]{6,20}$`)
 	rutRe   = regexp.MustCompile(`^\d{7,8}[0-9K]$`)
 	dniRe   = regexp.MustCompile(`^\d{7,8}$`)
 	urlRe   = regexp.MustCompile(`(?i)^https?://[^\s/$.?#][^\s]*$`)
@@ -163,7 +162,7 @@ func AnswerError(f Field, v any, path string, files FileCounts) string {
 			return "Email no válido"
 		}
 	case TypePhone:
-		if !phoneRe.MatchString(s) {
+		if !ValidPhone(s, f.DefaultCountry) {
 			return "Teléfono no válido"
 		}
 	case TypeNumber:

@@ -45,7 +45,7 @@ const demoSchema = `{
         { "key": "rep_nombre", "type": "text", "label": "Nombre completo", "required": true },
         { "key": "rep_rut", "type": "id", "idKind": "rut", "label": "RUT", "required": true },
         { "key": "rep_email", "type": "email", "label": "Email", "required": true },
-        { "key": "rep_telefono", "type": "phone", "label": "Teléfono", "placeholder": "+56 9 1234 5678" },
+        { "key": "rep_telefono", "type": "phone", "label": "Teléfono" },
         { "key": "rep_nacionalidad", "type": "country", "label": "Nacionalidad", "required": true },
         { "key": "rep_pep", "type": "yesno", "label": "¿Es persona expuesta políticamente (PEP)?", "required": true,
           "help": "Ocupa o ocupó en el último año un cargo público relevante, o es familiar directo de alguien que lo hace." },

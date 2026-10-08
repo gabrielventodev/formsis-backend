@@ -116,8 +116,9 @@ type Field struct {
 	Accept         []string   `json:"accept,omitempty"`
 	MaxMb          *float64   `json:"maxMb,omitempty"`
 	IDKind         string     `json:"idKind,omitempty"`
-	Currency       string     `json:"currency,omitempty"` // ISO 4217 code for currency fields
-	Fields         []Field    `json:"fields,omitempty"`   // repeater sub-fields
+	Currency       string     `json:"currency,omitempty"`       // ISO 4217 code for currency fields
+	DefaultCountry string     `json:"defaultCountry,omitempty"` // phone fields: ISO alpha-2 country picked at first
+	Fields         []Field    `json:"fields,omitempty"`         // repeater sub-fields
 	ShowIf         *Condition `json:"showIf,omitempty"`
 }
 
@@ -243,6 +244,10 @@ func (v *validator) field(p string, f Field, nested bool) {
 	case TypeCurrency:
 		if !knownCurrencies[f.Currency] {
 			v.add(p+".currency", "Elige la moneda")
+		}
+	case TypePhone:
+		if f.DefaultCountry != "" && !PhoneCountry(f.DefaultCountry) {
+			v.add(p+".defaultCountry", "Elige un país de la lista")
 		}
 	case TypeScale:
 		lo, hi := scaleRange(f)
