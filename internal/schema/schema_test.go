@@ -85,6 +85,7 @@ func TestValidateProblems(t *testing.T) {
 		{"condition on address", `{"sections":[{"key":"a","title":"A","fields":[
 			{"key":"x","type":"address","label":"X"},
 			{"key":"y","type":"text","label":"Y","showIf":{"field":"x","op":"notEmpty"}}]}]}`, "sections[0].fields[1].showIf.field", "condición"},
+		{"phone in a country without calling code", `{"sections":[{"key":"a","title":"A","fields":[{"key":"x","type":"phone","label":"X","defaultCountry":"AQ"}]}]}`, "sections[0].fields[0].defaultCountry", "país"},
 		{"id without kind", `{"sections":[{"key":"a","title":"A","fields":[{"key":"x","type":"id","label":"X"}]}]}`, "sections[0].fields[0].idKind", "documento"},
 	}
 	for _, c := range cases {

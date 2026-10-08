@@ -201,3 +201,30 @@ func TestCleanAndFind(t *testing.T) {
 		}
 	}
 }
+
+func TestValidPhone(t *testing.T) {
+	cases := []struct {
+		in, country string
+		want        bool
+	}{
+		{"+56961234567", "", true},     // E.164, what the portal stores
+		{"+5491123456789", "CL", true}, // Argentine mobile: the code wins over the field's country
+		{"+56 9 6123 4567", "", true},  // typed before the country picker
+		{"9 6123 4567", "", true},      // local number, read in Chile by default
+		{"987654321", "PE", true},
+		{"+5691234", "", false}, // too short
+		{"+56961234567abc", "", false},
+		{"tel: +56961234567", "", false},
+		{"+56912345678", "", false}, // 912 isn't a Chilean mobile range
+		{"hola", "", false},
+		{"123456", "", false},
+	}
+	for _, c := range cases {
+		if got := ValidPhone(c.in, c.country); got != c.want {
+			t.Errorf("ValidPhone(%q, %q) = %v, want %v", c.in, c.country, got, c.want)
+		}
+	}
+	if PhoneCountry("AQ") || !PhoneCountry("CL") || PhoneCountry("ZZ") {
+		t.Error("PhoneCountry should accept CL and reject AQ and ZZ")
+	}
+}
