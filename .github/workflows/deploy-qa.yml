@@ -1,17 +1,17 @@
-# Deploy automático de QA y dev: cada push a las ramas qa o dev de este repo entra por SSH al
-# servidor y actualiza ese ambiente con deploy/actualizar.sh de formsis-v2, que toma la punta de la
-# rama del mismo nombre de este submódulo.
+# Deploy automático de QA: cada push a la rama qa de este repo entra por SSH al
+# servidor y actualiza QA con deploy/actualizar.sh de formsis-v2, que toma la punta de la
+# rama qa de este submódulo.
 # main no despliega desde acá: producción usa el commit fijado en formsis-v2, así que se despliega
 # cuando formsis-v2 actualiza el submódulo y ese cambio llega a su main.
 # Usa los mismos secretos DEPLOY_* que formsis-v2: ver docs/ambientes.md de ese repo.
-name: Deploy QA y dev
+name: Deploy QA
 
 on:
   push:
-    branches: [qa, dev]
+    branches: [qa]
   workflow_dispatch:
 
-# Uno a la vez por ambiente; en el servidor actualizar.sh además espera a cualquier otro deploy.
+# Uno a la vez; en el servidor actualizar.sh además espera a cualquier otro deploy.
 concurrency:
   group: deploy-${{ github.ref_name }}
   cancel-in-progress: false
@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   deploy:
-    if: github.ref_name == 'qa' || github.ref_name == 'dev'
+    if: github.ref_name == 'qa'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
