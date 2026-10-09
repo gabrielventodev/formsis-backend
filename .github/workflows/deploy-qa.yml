@@ -1,0 +1,47 @@
+# Deploy automático de QA: cada push a la rama qa de este repo entra por SSH al
+# servidor y actualiza QA con deploy/actualizar.sh de formsis-v2, que toma la punta de la
+# rama qa de este submódulo.
+# main no despliega desde acá: producción usa el commit fijado en formsis-v2, así que se despliega
+# cuando formsis-v2 actualiza el submódulo y ese cambio llega a su main.
+# Usa los mismos secretos DEPLOY_* que formsis-v2: ver docs/ambientes.md de ese repo.
+name: Deploy QA
+
+on:
+  push:
+    branches: [qa]
+  workflow_dispatch:
+
+# Uno a la vez; en el servidor actualizar.sh además espera a cualquier otro deploy.
+concurrency:
+  group: deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.ref_name == 'qa'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Actualizar el servidor
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          AMBIENTE: ${{ github.ref_name }}
+        run: |
+          if [ -z "$DEPLOY_HOST" ] || [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_SSH_KEY" ] || [ -z "$DEPLOY_KNOWN_HOSTS" ]; then
+            # Sin configurar no es un error: el deploy queda apagado hasta crear los secretos.
+            echo "::notice::Deploy automático sin configurar: faltan los secretos DEPLOY_*. Ver docs/ambientes.md de formsis-v2."
+            exit 0
+          fi
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy ~/.ssh/known_hosts
+          # En el servidor la llave solo puede correr deploy/actualizar.sh; el comando es el ambiente.
+          ssh -i ~/.ssh/deploy -o StrictHostKeyChecking=yes -o ServerAliveInterval=30 \
+            "$DEPLOY_USER@$DEPLOY_HOST" "$AMBIENTE"
